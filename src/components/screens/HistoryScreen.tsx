@@ -1,8 +1,9 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { AppState, Category, Expense } from "../../types";
 import { formatFCFA, isSameDay } from "../../utils/engine";
 import { CaurisIcon, BalaiIcon } from "../icons/CustomIcons";
-import { Search, Filter, Printer, Calendar, Copy, ChevronDown } from "lucide-react";
+import { Search, Filter, FileText, Calendar, Copy, ChevronDown } from "lucide-react";
 
 interface HistoryScreenProps {
   state: AppState;
@@ -99,14 +100,16 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
             </p>
           </div>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            whileHover={{ scale: 1.02 }}
             type="button"
             onClick={onOpenPdf}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#E8DDC9] hover:bg-[#FAF6EF] rounded-full text-xs font-medium text-[#1F1A15]"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#E8DDC9] hover:bg-[#FAF6EF] active:bg-[#E8DDC9] rounded-full text-xs font-medium text-[#1F1A15] shadow-2xs transition-colors shrink-0"
           >
-            <Printer className="w-3.5 h-3.5 text-[#B5541F]" />
-            <span>Rapport PDF</span>
-          </button>
+            <FileText className="w-3.5 h-3.5 text-[#B5541F]" />
+            <span>Export PDF</span>
+          </motion.button>
         </div>
 
         {/* Deux sous-vues : Liste / Analyse */}

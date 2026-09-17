@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { AppProfile, AppState, Expense, Goal, Income, QuickTile, Debt, Tontine } from "./types";
 import { loadAppState, saveAppState, resetAppState, DEFAULT_APP_STATE } from "./utils/storage";
 import { TodayScreen } from "./components/screens/TodayScreen";
@@ -51,23 +52,32 @@ export function App() {
   const isDark = state.profile.darkMode;
 
   // Finalisation de l'onboarding
-  const handleCompleteOnboarding = (profile: AppProfile, initialGoal?: Goal) => {
+  const handleCompleteOnboarding = (dataOrProfile: any, maybeInitialGoal?: Goal) => {
+    // Si dataOrProfile contient { profile, goals } provenant de OnboardingFlow
+    const actualProfile: AppProfile = dataOrProfile?.profile ? dataOrProfile.profile : dataOrProfile;
+    const initialGoals: Goal[] = Array.isArray(dataOrProfile?.goals)
+      ? dataOrProfile.goals
+      : (maybeInitialGoal ? [maybeInitialGoal] : []);
+
+    const chosenName = (actualProfile.name && actualProfile.name.trim()) || "Michael";
+
     setState((prev) => {
-      const updatedGoals = initialGoal
-        ? [...prev.goals.filter((g) => g.id !== initialGoal.id), initialGoal]
+      const updatedGoals = initialGoals.length > 0
+        ? initialGoals
         : prev.goals;
 
       return {
         ...prev,
         profile: {
           ...prev.profile,
-          ...profile,
+          ...actualProfile,
+          name: chosenName,
           onboardingCompleted: true,
         },
         goals: updatedGoals,
       };
     });
-    showToast("Bienvenue sur NAFA !");
+    showToast(`Bienvenue sur NAFA, ${chosenName} !`);
   };
 
   // Traitement d'état importé depuis PDF
@@ -449,67 +459,78 @@ export function App() {
           </div>
         )}
 
-        {/* ÉCRAN ACTIF */}
+        {/* ÉCRAN ACTIF AVEC TRANSITION FLUIDE */}
         <div className="flex-1 overflow-y-auto">
-          {activeTab === "today" && (
-            <TodayScreen
-              state={state}
-              onOpenNewExpense={(cat, amount) => {
-                setExpenseDefaultCat(cat);
-                setExpenseDefaultAmount(amount);
-                setShowNewExpense(true);
-              }}
-              onOpenCatchUp={() => setShowCatchUp(true)}
-              onOpenSettings={() => setShowSettings(true)}
-              onOpenFullHistory={() => setActiveTab("history")}
-              onDeleteExpense={handleDeleteExpense}
-              onDuplicateExpense={handleDuplicateExpense}
-              onQuickTileTap={handleQuickTileTap}
-              onSetPocketBalance={() => setShowSetPocketModal(true)}
-              onAcceptChallenge={handleAcceptChallenge}
-              onDeclineChallenge={handleDeclineChallenge}
-            />
-          )}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="min-h-full"
+            >
+              {activeTab === "today" && (
+                <TodayScreen
+                  state={state}
+                  onOpenNewExpense={(cat, amount) => {
+                    setExpenseDefaultCat(cat);
+                    setExpenseDefaultAmount(amount);
+                    setShowNewExpense(true);
+                  }}
+                  onOpenCatchUp={() => setShowCatchUp(true)}
+                  onOpenSettings={() => setShowSettings(true)}
+                  onOpenFullHistory={() => setActiveTab("history")}
+                  onDeleteExpense={handleDeleteExpense}
+                  onDuplicateExpense={handleDuplicateExpense}
+                  onQuickTileTap={handleQuickTileTap}
+                  onSetPocketBalance={() => setShowSetPocketModal(true)}
+                  onAcceptChallenge={handleAcceptChallenge}
+                  onDeclineChallenge={handleDeclineChallenge}
+                />
+              )}
 
-          {activeTab === "goals" && (
-            <GoalsScreen
-              state={state}
-              onAddAmountToGoal={handleAddAmountToGoal}
-              onCreateGoal={handleCreateGoal}
-              onDeleteGoal={handleDeleteGoal}
-              onArchiveGoal={handleArchiveGoal}
-            />
-          )}
+              {activeTab === "goals" && (
+                <GoalsScreen
+                  state={state}
+                  onAddAmountToGoal={handleAddAmountToGoal}
+                  onCreateGoal={handleCreateGoal}
+                  onDeleteGoal={handleDeleteGoal}
+                  onArchiveGoal={handleArchiveGoal}
+                />
+              )}
 
-          {activeTab === "carnet" && (
-            <CarnetScreen
-              state={state}
-              onAddDebt={handleAddDebt}
-              onSettleDebt={handleSettleDebt}
-              onDeleteDebt={handleDeleteDebt}
-              onAddTontine={handleAddTontine}
-              onTontinePayRound={handleTontinePayRound}
-              onTontineCollect={handleTontineCollect}
-              onDeleteTontine={handleDeleteTontine}
-            />
-          )}
+              {activeTab === "carnet" && (
+                <CarnetScreen
+                  state={state}
+                  onAddDebt={handleAddDebt}
+                  onSettleDebt={handleSettleDebt}
+                  onDeleteDebt={handleDeleteDebt}
+                  onAddTontine={handleAddTontine}
+                  onTontinePayRound={handleTontinePayRound}
+                  onTontineCollect={handleTontineCollect}
+                  onDeleteTontine={handleDeleteTontine}
+                />
+              )}
 
-          {activeTab === "history" && (
-            <HistoryScreen
-              state={state}
-              onDeleteExpense={handleDeleteExpense}
-              onDuplicateExpense={handleDuplicateExpense}
-              onOpenPdf={() => setShowPdfModal(true)}
-              onOpenNewExpense={(cat, amount) => {
-                setExpenseDefaultCat(cat);
-                setExpenseDefaultAmount(amount);
-                setShowNewExpense(true);
-              }}
-            />
-          )}
+              {activeTab === "history" && (
+                <HistoryScreen
+                  state={state}
+                  onDeleteExpense={handleDeleteExpense}
+                  onDuplicateExpense={handleDuplicateExpense}
+                  onOpenPdf={() => setShowPdfModal(true)}
+                  onOpenNewExpense={(cat, amount) => {
+                    setExpenseDefaultCat(cat);
+                    setExpenseDefaultAmount(amount);
+                    setShowNewExpense(true);
+                  }}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
-        {/* 3.1 NAVIGATION BASSE — 4 ONGLETS STRICTS */}
+        {/* 3.1 NAVIGATION BASSE — 4 ONGLETS STRICTS AVEC MICRO-INTERACTIONS */}
         <nav
           aria-label="Navigation principale"
           className={`fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md h-16 border-t px-2 flex items-center justify-around z-40 backdrop-blur-md transition-colors ${
@@ -519,10 +540,11 @@ export function App() {
           }`}
         >
           {/* Onglet 1 : Aujourd'hui */}
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             type="button"
             onClick={() => setActiveTab("today")}
-            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative ${
               activeTab === "today"
                 ? "text-[#B5541F] font-semibold"
                 : "text-[#8A8884] hover:text-[#1F1A15]"
@@ -530,13 +552,21 @@ export function App() {
           >
             <Sun className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] tracking-tight">Aujourd'hui</span>
-          </button>
+            {activeTab === "today" && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute -top-1 w-8 h-1 bg-[#B5541F] rounded-full"
+                transition={{ type: "spring", stiffness: 450, damping: 30 }}
+              />
+            )}
+          </motion.button>
 
           {/* Onglet 2 : Objectifs */}
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             type="button"
             onClick={() => setActiveTab("goals")}
-            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative ${
               activeTab === "goals"
                 ? "text-[#B5541F] font-semibold"
                 : "text-[#8A8884] hover:text-[#1F1A15]"
@@ -544,13 +574,21 @@ export function App() {
           >
             <Target className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] tracking-tight">Objectifs</span>
-          </button>
+            {activeTab === "goals" && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute -top-1 w-8 h-1 bg-[#B5541F] rounded-full"
+                transition={{ type: "spring", stiffness: 450, damping: 30 }}
+              />
+            )}
+          </motion.button>
 
           {/* Onglet 3 : Carnet */}
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             type="button"
             onClick={() => setActiveTab("carnet")}
-            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative ${
               activeTab === "carnet"
                 ? "text-[#B5541F] font-semibold"
                 : "text-[#8A8884] hover:text-[#1F1A15]"
@@ -558,13 +596,21 @@ export function App() {
           >
             <BookOpen className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] tracking-tight">Carnet</span>
-          </button>
+            {activeTab === "carnet" && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute -top-1 w-8 h-1 bg-[#B5541F] rounded-full"
+                transition={{ type: "spring", stiffness: 450, damping: 30 }}
+              />
+            )}
+          </motion.button>
 
           {/* Onglet 4 : Mémoire */}
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             type="button"
             onClick={() => setActiveTab("history")}
-            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative ${
               activeTab === "history"
                 ? "text-[#B5541F] font-semibold"
                 : "text-[#8A8884] hover:text-[#1F1A15]"
@@ -572,7 +618,14 @@ export function App() {
           >
             <Clock className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] tracking-tight">Mémoire</span>
-          </button>
+            {activeTab === "history" && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute -top-1 w-8 h-1 bg-[#B5541F] rounded-full"
+                transition={{ type: "spring", stiffness: 450, damping: 30 }}
+              />
+            )}
+          </motion.button>
         </nav>
 
         {/* MODAL : NOUVELLE DÉPENSE (Partie 8.1) */}

@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import confetti from "canvas-confetti";
 import { AppState, Goal, GoalMode, GoalVisual } from "../../types";
 import { CaurisIcon, CalebasseIcon, BaobabIcon, BogolanFrise } from "../icons/CustomIcons";
 import { formatFCFA } from "../../utils/engine";
@@ -40,7 +42,16 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
 
   const handleDeposit = () => {
     if (!selectedGoalForAdd || Number(amountToAddStr) <= 0) return;
-    onAddAmountToGoal(selectedGoalForAdd.id, Number(amountToAddStr));
+    const addedAmount = Number(amountToAddStr);
+    onAddAmountToGoal(selectedGoalForAdd.id, addedAmount);
+
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.6 },
+      colors: ["#C9922E", "#B5541F", "#4A6B3F"],
+    });
+
     setSelectedGoalForAdd(null);
     setAmountToAddStr("");
   };

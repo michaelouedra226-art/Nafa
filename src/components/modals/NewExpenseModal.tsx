@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { Category, Expense, Goal, RoundingUnit } from "../../types";
 import { CaurisIcon } from "../icons/CustomIcons";
 import { calculateRoundUp, formatFCFA } from "../../utils/engine";
@@ -104,7 +105,11 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
         </div>
       )}
 
-      <div
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 28, stiffness: 320 }}
         className="w-full max-w-md mx-auto bg-[#FAF6EF] rounded-t-[20px] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border-t border-[#E8DDC9]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -315,16 +320,17 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
 
         {/* Bouton d'action principal */}
         <div className="p-4 bg-[#FAF6EF] border-t border-[#E8DDC9]/60">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             type="button"
             disabled={currentAmount <= 0}
             onClick={handleValidate}
-            className="w-full py-3.5 bg-[#B5541F] disabled:opacity-30 text-[#FAF6EF] rounded-full text-base font-medium shadow-sm active:scale-[0.98] transition-transform"
+            className="w-full py-3.5 bg-[#B5541F] hover:bg-[#A04514] active:bg-[#8F3B0E] disabled:opacity-30 text-[#FAF6EF] rounded-full text-base font-medium shadow-sm transition-all"
           >
             Ajouter la dépense
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

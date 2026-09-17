@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "motion/react";
 import { AppState, Expense, QuickTile } from "../../types";
 import { CaurisIcon, BalaiIcon } from "../icons/CustomIcons";
 import { computeDailyAllowance, detectContextualAlerts, formatFCFA, isSameDay } from "../../utils/engine";
@@ -85,7 +86,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
       <div className="flex items-center justify-between pt-4 pb-3 px-5 border-b border-[#E8DDC9]/40 bg-[#FAF6EF]">
         <div>
           <h1 className="font-fraunces text-lg font-semibold text-[#1F1A15]">
-            {greeting}, {state.profile.name || "Awa"}
+            {greeting}, {state.profile.name || "Michael"}
           </h1>
           <p className="text-xs text-[#8A8884] capitalize">{dateFormatted}</p>
         </div>
@@ -109,7 +110,9 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
       {alerts.length > 0 && (
         <div className="px-5 pt-3 space-y-2">
           {alerts.map((alertText, idx) => (
-            <div
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
               key={idx}
               className="p-3 bg-[#E8DDC9]/40 border border-[#E8DDC9] rounded-[14px] flex items-center justify-between text-xs"
             >
@@ -126,19 +129,29 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                   Rattrapage
                 </button>
               )}
-            </div>
+            </motion.div>
           ))}
         </div>
       )}
 
-      {/* 4.3 Le Héros — Le Chiffre du Jour */}
-      <div className="px-5 py-6 text-center">
+      {/* 4.3 Le Héros — Le Chiffre du Jour Animé */}
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="px-5 py-6 text-center"
+      >
         <span className="text-xs uppercase font-medium tracking-wider text-[#8A8884]">
           Reste à dépenser
         </span>
 
         {/* Chiffre très grand (54px) en Fraunces tabulaire */}
-        <div className="my-1.5 flex items-baseline justify-center">
+        <motion.div 
+          initial={{ y: 8, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="my-1.5 flex items-baseline justify-center"
+        >
           <span
             className={`font-fraunces text-5xl sm:text-6xl font-bold tracking-tight tab-num transition-colors ${
               state.profile.privateMode ? "filter blur-sm select-none" : ""
@@ -153,7 +166,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           >
             F
           </span>
-        </div>
+        </motion.div>
 
         <p className="text-xs text-[#8A8884] font-medium">
           par jour jusqu'à la fin du mois
@@ -190,26 +203,30 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
 
-      {/* 4.4 Barre de progression fine (3px) */}
+      {/* 4.4 Barre de progression fine (3px) animée */}
       <div className="px-5 mb-5">
         <div className="w-full h-[3px] bg-[#E8DDC9] rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-600"
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min(100, Math.round(allowance.progressRatio * 100))}%` }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="h-full rounded-full"
             style={{
-              width: `${Math.min(100, Math.round(allowance.progressRatio * 100))}%`,
               backgroundColor: allowance.statusColor,
             }}
           />
         </div>
       </div>
 
-      {/* 4.5 Les trois pastilles du jour (Nourriture, Transport, Sorties) */}
+      {/* 4.5 Les trois pastilles du jour (Nourriture, Transport, Sorties) animées */}
       <div className="px-5 mb-6">
         <div className="grid grid-cols-3 gap-2">
           {/* Nourriture */}
-          <button
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            whileHover={{ y: -1 }}
             type="button"
             onClick={() => onOpenNewExpense("cat_nourriture")}
             className="p-3 bg-white rounded-[14px] border border-[#E8DDC9]/70 text-left hover:border-[#B5541F] transition-all shadow-xs"
@@ -223,10 +240,12 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             <div className="font-fraunces text-sm font-bold text-[#1F1A15] tab-num">
               {catNourriture > 0 ? formatFCFA(catNourriture) : "0 F"}
             </div>
-          </button>
+          </motion.button>
 
           {/* Transport */}
-          <button
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            whileHover={{ y: -1 }}
             type="button"
             onClick={() => onOpenNewExpense("cat_transport")}
             className="p-3 bg-white rounded-[14px] border border-[#E8DDC9]/70 text-left hover:border-[#1E2A44] transition-all shadow-xs"
@@ -240,10 +259,12 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             <div className="font-fraunces text-sm font-bold text-[#1F1A15] tab-num">
               {catTransport > 0 ? formatFCFA(catTransport) : "0 F"}
             </div>
-          </button>
+          </motion.button>
 
           {/* Sorties */}
-          <button
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            whileHover={{ y: -1 }}
             type="button"
             onClick={() => onOpenNewExpense("cat_sorties")}
             className="p-3 bg-white rounded-[14px] border border-[#E8DDC9]/70 text-left hover:border-[#C9922E] transition-all shadow-xs"
@@ -257,7 +278,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             <div className="font-fraunces text-sm font-bold text-[#1F1A15] tab-num">
               {catSorties > 0 ? formatFCFA(catSorties) : "0 F"}
             </div>
-          </button>
+          </motion.button>
         </div>
 
         {todayExpenses.length === 0 && (
@@ -267,32 +288,35 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         )}
       </div>
 
-      {/* 4.6 Bouton principal "Ajouter une dépense" */}
+      {/* 4.6 Bouton principal "Ajouter une dépense" avec animation vivante */}
       <div className="px-5 mb-4">
-        <button
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          whileHover={{ scale: 1.01 }}
           type="button"
           onClick={() => onOpenNewExpense()}
-          className="w-full py-4 bg-[#B5541F] text-[#FAF6EF] rounded-full text-base font-semibold shadow-md active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+          className="w-full py-4 bg-[#B5541F] hover:bg-[#A04514] active:bg-[#8F3B0E] text-[#FAF6EF] rounded-full text-base font-semibold shadow-md transition-all flex items-center justify-center gap-2"
         >
           <Plus className="w-5 h-5" />
           <span>Ajouter une dépense</span>
-        </button>
+        </motion.button>
       </div>
 
       {/* 4.9 Tuiles rapides (Max 3) */}
       {state.quickTiles.length > 0 && (
         <div className="px-5 mb-5 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
           {state.quickTiles.slice(0, 3).map((tile) => (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.93 }}
               key={tile.id}
               type="button"
               onClick={() => onQuickTileTap(tile)}
-              className="px-3.5 py-2 rounded-full bg-white border border-[#E8DDC9] text-xs font-medium text-[#1F1A15] shadow-xs flex items-center gap-1.5 hover:bg-[#E8DDC9]/30 active:scale-95 shrink-0"
+              className="px-3.5 py-2 rounded-full bg-white border border-[#E8DDC9] text-xs font-medium text-[#1F1A15] shadow-xs flex items-center gap-1.5 hover:bg-[#E8DDC9]/30 shrink-0"
             >
               <Zap className="w-3.5 h-3.5 text-[#C9922E]" />
               <span>{tile.label}</span>
               <span className="text-[#8A8884]">{formatFCFA(tile.amount)}</span>
-            </button>
+            </motion.button>
           ))}
         </div>
       )}

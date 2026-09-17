@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { AppState, Debt, Tontine } from "../../types";
 import { formatFCFA } from "../../utils/engine";
 import { CaurisIcon } from "../icons/CustomIcons";
@@ -176,13 +177,13 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
                 {iOweDebts.map((d) => (
                   <div
                     key={d.id}
-                    className="p-3.5 bg-white rounded-[14px] border border-[#E8DDC9] flex items-center justify-between"
+                    className="p-3.5 bg-white rounded-[14px] border border-[#E8DDC9] flex items-center justify-between gap-2"
                   >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-xs text-[#1F1A15]">{d.person}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-xs text-[#1F1A15] truncate">{d.person}</span>
                         {d.dueDate && (
-                          <span className="text-[10px] text-[#A8453F] bg-[#A8453F]/10 px-1.5 py-0.5 rounded font-medium">
+                          <span className="text-[10px] text-[#A8453F] bg-[#A8453F]/10 px-1.5 py-0.5 rounded font-medium shrink-0">
                             Pour le {d.dueDate}
                           </span>
                         )}
@@ -190,10 +191,10 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
                       <span className="font-fraunces text-base font-bold text-[#A8453F] tab-num block mt-0.5">
                         {formatFCFA(d.amount)}
                       </span>
-                      {d.note && <p className="text-[11px] text-[#8A8884]">{d.note}</p>}
+                      {d.note && <p className="text-[11px] text-[#8A8884] truncate">{d.note}</p>}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
                         onClick={() => onSettleDebt(d.id)}
@@ -206,7 +207,7 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
                       <button
                         type="button"
                         onClick={() => onDeleteDebt(d.id)}
-                        className="text-[#8A8884] hover:text-[#A8453F] p-1"
+                        className="text-[#8A8884] hover:text-[#A8453F] p-1.5"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -233,13 +234,13 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
                   return (
                     <div
                       key={d.id}
-                      className="p-3.5 bg-white rounded-[14px] border border-[#E8DDC9] flex items-center justify-between"
+                      className="p-3.5 bg-white rounded-[14px] border border-[#E8DDC9] flex items-center justify-between gap-2"
                     >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-xs text-[#1F1A15]">{d.person}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-xs text-[#1F1A15] truncate">{d.person}</span>
                           {d.dueDate && (
-                            <span className="text-[10px] text-[#8A8884]">
+                            <span className="text-[10px] text-[#8A8884] shrink-0">
                               Attendu pour {d.dueDate}
                             </span>
                           )}
@@ -247,10 +248,10 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
                         <span className="font-fraunces text-base font-bold text-[#4A6B3F] tab-num block mt-0.5">
                           {formatFCFA(d.amount)}
                         </span>
-                        {d.note && <p className="text-[11px] text-[#8A8884]">{d.note}</p>}
+                        {d.note && <p className="text-[11px] text-[#8A8884] truncate">{d.note}</p>}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {d.phone && (
                           <a
                             href={`https://wa.me/${d.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
@@ -258,7 +259,7 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
                             )}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="p-2 bg-[#4A6B3F]/10 text-[#4A6B3F] rounded-full"
+                            className="p-2 bg-[#4A6B3F]/10 text-[#4A6B3F] rounded-full hover:bg-[#4A6B3F]/20 transition-colors"
                             title="Envoyer un rappel courtois par WhatsApp"
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
@@ -268,7 +269,7 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
                         <button
                           type="button"
                           onClick={() => onSettleDebt(d.id)}
-                          className="px-2.5 py-1.5 bg-[#4A6B3F] text-white rounded-full text-[11px] font-medium flex items-center gap-1"
+                          className="px-2.5 py-1.5 bg-[#4A6B3F] text-white rounded-full text-[11px] font-medium flex items-center gap-1 hover:bg-[#3D5734] transition-colors"
                         >
                           <Check className="w-3 h-3" />
                           <span>Reçu</span>
@@ -360,11 +361,11 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
                     </div>
 
                     {/* Actions tontine */}
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex flex-wrap gap-2 pt-1">
                       <button
                         type="button"
                         onClick={() => onTontinePayRound(t.id)}
-                        className="flex-1 py-2 bg-[#FAF6EF] hover:bg-[#B5541F] text-[#B5541F] hover:text-white border border-[#B5541F]/40 rounded-full text-xs font-semibold transition-colors"
+                        className="flex-1 min-w-[130px] py-2 px-3 bg-[#FAF6EF] hover:bg-[#B5541F] text-[#B5541F] hover:text-white border border-[#B5541F]/40 rounded-full text-xs font-semibold transition-colors text-center"
                       >
                         + Cotiser ce tour
                       </button>
@@ -373,12 +374,12 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
                         <button
                           type="button"
                           onClick={() => onTontineCollect(t.id)}
-                          className="px-4 py-2 bg-[#4A6B3F] text-white rounded-full text-xs font-semibold"
+                          className="flex-1 min-w-[140px] py-2 px-3 bg-[#4A6B3F] hover:bg-[#3D5734] text-white rounded-full text-xs font-semibold text-center transition-colors"
                         >
                           Ramasser la cagnotte
                         </button>
                       ) : (
-                        <span className="px-3 py-2 bg-[#4A6B3F]/10 text-[#4A6B3F] rounded-full text-[11px] font-semibold flex items-center gap-1">
+                        <span className="py-2 px-3 bg-[#4A6B3F]/10 text-[#4A6B3F] rounded-full text-[11px] font-semibold flex items-center justify-center gap-1">
                           <Check className="w-3 h-3" /> Ramassée
                         </span>
                       )}

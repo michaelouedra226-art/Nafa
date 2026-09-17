@@ -1,4 +1,4 @@
-import { AppState, Category } from "../types";
+import { AppProfile, AppState, Category } from "../types";
 
 export const DEFAULT_CATEGORIES: Category[] = [
   {
@@ -88,14 +88,24 @@ export function loadAppState(): AppState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return INITIAL_APP_STATE;
     const parsed = JSON.parse(raw);
+
+    // Extraction robuste en cas d'imbrication profile.profile
+    const rawProfile = parsed.profile || {};
+    const nestedProfile = (rawProfile as any).profile || {};
+    const resolvedName = (rawProfile.name?.trim() || nestedProfile.name?.trim() || "").replace(/^Awa$/i, "");
+
+    const cleanedProfile: AppProfile = {
+      ...INITIAL_APP_STATE.profile,
+      ...nestedProfile,
+      ...rawProfile,
+      name: resolvedName,
+      lastOpenedTimestamp: Date.now(),
+    };
+
     return {
       ...INITIAL_APP_STATE,
       ...parsed,
-      profile: {
-        ...INITIAL_APP_STATE.profile,
-        ...(parsed.profile || {}),
-        lastOpenedTimestamp: Date.now(),
-      },
+      profile: cleanedProfile,
     };
   } catch (err) {
     console.error("Erreur de lecture du stockage local:", err);

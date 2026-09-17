@@ -1,0 +1,45 @@
+name: Build & Verification GitHub
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compilation & Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupération du code (Checkout)
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Vérification des types TypeScript (Lint)
+        run: npm run lint
+
+      - name: Compilation production (Vite + esbuild)
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Sauvegarde des artefacts compilés
+        uses: actions/upload-artifact@v4
+        with:
+          name: nafa-production-dist
+          path: dist/
+          retention-days: 7

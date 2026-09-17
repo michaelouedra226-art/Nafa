@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { AppState } from "../../types";
-import { CaurisIcon, BogolanFrise } from "../icons/CustomIcons";
-import { formatFCFA } from "../../utils/engine";
-import { Printer, Download, X, CheckSquare, Square, ShieldCheck } from "lucide-react";
+import { CaurisIcon } from "../icons/CustomIcons";
+import { generateNafaPdf, PdfGenerationOptions } from "../../utils/pdfGenerator";
+import { FileText, Award, Download, X, Check, Calendar, CheckSquare, Square, ShieldCheck, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import confetti from "canvas-confetti";
 
 interface PdfExportModalProps {
   state: AppState;
@@ -10,332 +12,270 @@ interface PdfExportModalProps {
 }
 
 export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }) => {
-  const [period, setPeriod] = useState<"this_month" | "all">("this_month");
   const [docType, setDocType] = useState<"rapport" | "attestation">("rapport");
-  const [includeSummary, setIncludeSummary] = useState<boolean>(true);
-  const [includeExpenses, setIncludeExpenses] = useState<boolean>(true);
+  const [period, setPeriod] = useState<"this_month" | "all">("this_month");
+  const [includeDetails, setIncludeDetails] = useState<boolean>(true);
   const [includeGoals, setIncludeGoals] = useState<boolean>(true);
-  const [includeCarnet, setIncludeCarnet] = useState<boolean>(true);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
 
+  const userName = (state.profile.name && state.profile.name.trim()) || "Michael";
   const now = new Date();
-  const monthName = now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
-  const fullDate = now.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const currentMonthName = now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 
-  // Filtrer les dépenses et revenus
-  const filteredExpenses = period === "this_month"
-    ? state.expenses.filter((e) => {
-        const d = new Date(e.timestamp);
-        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-      })
-    : state.expenses;
+  const handleDownload = () => {
+    setIsGenerating(true);
+    setDownloadSuccess(null);
 
-  const filteredIncomes = period === "this_month"
-    ? state.incomes.filter((i) => {
-        const d = new Date(i.timestamp);
-        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-      })
-    : state.incomes;
+    setTimeout(() => {
+      try {
+        const options: PdfGenerationOptions = {
+          docType,
+          period,
+          includeDetails,
+          includeGoals,
+        };
 
-  const totalSpent = filteredExpenses.reduce((s, e) => s + e.amount, 0);
-  const totalIncome = filteredIncomes.reduce((s, i) => s + i.amount, 0);
-  const totalSavedInGoals = state.goals.reduce((s, g) => s + g.currentAmount, 0);
-  const completedGoalsCount = state.goals.filter((g) => g.completed).length;
+        const fileName = generateNafaPdf(state, options);
+        setIsGenerating(false);
+        setDownloadSuccess(fileName);
 
-  const handlePrint = () => {
-    window.print();
+        // Effet de célébration
+        confetti({
+          particleCount: 40,
+          spread: 55,
+          origin: { y: 0.7 },
+          colors: ["#B5541F", "#C9922E", "#4A6B3F", "#1E2A44"],
+        });
+      } catch (err) {
+        console.error("Erreur de génération PDF:", err);
+        setIsGenerating(false);
+        alert("Une erreur est survenue lors de la création du fichier PDF.");
+      }
+    }, 450);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-      <div
-        className="w-full max-w-4xl bg-[#FAF6EF] rounded-[20px] shadow-2xl my-auto overflow-hidden border border-[#E8DDC9] flex flex-col max-h-[96vh]"
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 15 }}
+        transition={{ duration: 0.22, ease: "easeOut" }}
+        className="w-full max-w-md bg-[#FAF6EF] rounded-[22px] shadow-2xl overflow-hidden border border-[#E8DDC9] flex flex-col my-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Barre d'outils haut (non imprimable) */}
-        <div className="p-4 bg-white border-b border-[#E8DDC9] flex items-center justify-between no-print">
-          <div className="flex items-center gap-2">
-            <CaurisIcon size={22} color="#B5541F" filled />
-            <h2 className="font-fraunces text-base font-semibold text-[#1F1A15]">
-              Document officiel NAFA (A4)
-            </h2>
+        {/* En-tête sans débordement, mobile-first */}
+        <div className="px-5 py-4 bg-white border-b border-[#E8DDC9] flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-[#B5541F]/10 flex items-center justify-center text-[#B5541F]">
+              <FileText className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="font-fraunces text-base font-bold text-[#1F1A15] leading-tight">
+                Documents officiels NAFA
+              </h2>
+              <p className="text-[11px] text-[#8A8884]">
+                Exportation PDF certifiée (Format A4)
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex bg-[#E8DDC9]/30 rounded-full p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-full text-[#8A8884] hover:text-[#1F1A15] hover:bg-[#FAF6EF] transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Corps principal */}
+        <div className="p-5 space-y-5 text-[#1F1A15]">
+          {/* Titulaire actuel */}
+          <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#E8DDC9]/30 border border-[#E8DDC9] rounded-[12px] text-xs">
+            <span className="text-[#8A8884]">Titulaire certifié :</span>
+            <span className="font-semibold text-[#1F1A15]">{userName}</span>
+          </div>
+
+          {/* Choix du type de document (2 cartes distinctes) */}
+          <div className="space-y-2">
+            <label className="block text-[11px] font-semibold text-[#8A8884] uppercase tracking-wider">
+              Type de document à télécharger
+            </label>
+
+            <div className="grid grid-cols-1 gap-2.5">
+              {/* Option 1 : Rapport mensuel */}
               <button
                 type="button"
                 onClick={() => setDocType("rapport")}
-                className={`px-3 py-1 rounded-full font-medium ${
-                  docType === "rapport" ? "bg-[#B5541F] text-white" : "text-[#55534F]"
+                className={`flex items-start gap-3 p-3.5 rounded-[14px] text-left transition-all border ${
+                  docType === "rapport"
+                    ? "bg-white border-[#B5541F] shadow-xs"
+                    : "bg-[#FAF6EF] border-[#E8DDC9] opacity-80 hover:opacity-100"
                 }`}
               >
-                Rapport financier
+                <div className={`mt-0.5 p-2 rounded-full ${docType === "rapport" ? "bg-[#B5541F] text-white" : "bg-[#E8DDC9] text-[#55534F]"}`}>
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-[#1F1A15]">Rapport de gestion mensuelle</span>
+                    {docType === "rapport" && <Check className="w-4 h-4 text-[#B5541F]" />}
+                  </div>
+                  <p className="text-[11px] text-[#8A8884] mt-0.5 leading-relaxed">
+                    Bilan complet : revenus, dépenses, catégorisation et solde restant. Parfait pour faire le point personnel ou présenter aux parents.
+                  </p>
+                </div>
               </button>
+
+              {/* Option 2 : Attestation d'épargne */}
               <button
                 type="button"
                 onClick={() => setDocType("attestation")}
-                className={`px-3 py-1 rounded-full font-medium ${
-                  docType === "attestation" ? "bg-[#B5541F] text-white" : "text-[#55534F]"
+                className={`flex items-start gap-3 p-3.5 rounded-[14px] text-left transition-all border ${
+                  docType === "attestation"
+                    ? "bg-white border-[#C9922E] shadow-xs"
+                    : "bg-[#FAF6EF] border-[#E8DDC9] opacity-80 hover:opacity-100"
                 }`}
               >
-                Attestation d'épargne
+                <div className={`mt-0.5 p-2 rounded-full ${docType === "attestation" ? "bg-[#C9922E] text-white" : "bg-[#E8DDC9] text-[#55534F]"}`}>
+                  <Award className="w-4 h-4" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-[#1F1A15]">Attestation officielle d'épargne</span>
+                    {docType === "attestation" && <Check className="w-4 h-4 text-[#C9922E]" />}
+                  </div>
+                  <p className="text-[11px] text-[#8A8884] mt-0.5 leading-relaxed">
+                    Certificat solennel avec sceau NAFA pour bailleurs (logement), tuteurs ou banques attestant de ta capacité d'épargne et régularité.
+                  </p>
+                </div>
               </button>
             </div>
-
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#B5541F] text-white rounded-full text-xs font-medium hover:opacity-90 shadow-xs"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Imprimer / PDF</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 text-[#8A8884] hover:text-[#1F1A15]"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
-        </div>
 
-        {/* Aperçu du document A4 */}
-        <div className="p-6 overflow-y-auto flex-1 bg-[#FAF6EF]">
-          <div className="max-w-[700px] mx-auto bg-white p-8 sm:p-12 shadow-sm rounded-lg border border-[#E8DDC9]/80 text-[#1F1A15] relative">
-            {/* Frise supérieure bogolan */}
-            <div className="mb-6">
-              <BogolanFrise color="#B5541F" height={10} />
-            </div>
-
-            {/* En-tête de document */}
-            <div className="flex items-start justify-between border-b border-[#E8DDC9] pb-6 mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#FAF6EF] border border-[#E8DDC9] flex items-center justify-center">
-                  <CaurisIcon size={24} color="#B5541F" filled />
-                </div>
-                <div>
-                  <h1 className="font-fraunces text-2xl font-bold tracking-tight text-[#B5541F]">
-                    NAFA
-                  </h1>
-                  <p className="text-[10px] text-[#8A8884] uppercase tracking-widest">
-                    Chaque franc compte
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <p className="text-xs font-semibold text-[#1F1A15]">
-                  {state.profile.name || "Étudiant"}
-                </p>
-                <p className="text-[11px] text-[#8A8884] capitalize">
-                  {state.profile.situation} · Ouagadougou
-                </p>
-                <p className="text-[10px] text-[#8A8884] mt-0.5">{fullDate}</p>
+          {/* Options de période si rapport */}
+          {docType === "rapport" && (
+            <div className="space-y-2">
+              <label className="block text-[11px] font-semibold text-[#8A8884] uppercase tracking-wider">
+                Période
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPeriod("this_month")}
+                  className={`py-2 px-3 rounded-[10px] text-xs font-medium border text-center transition-all ${
+                    period === "this_month"
+                      ? "bg-[#1F1A15] text-white border-[#1F1A15]"
+                      : "bg-white text-[#55534F] border-[#E8DDC9]"
+                  }`}
+                >
+                  {currentMonthName}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriod("all")}
+                  className={`py-2 px-3 rounded-[10px] text-xs font-medium border text-center transition-all ${
+                    period === "all"
+                      ? "bg-[#1F1A15] text-white border-[#1F1A15]"
+                      : "bg-white text-[#55534F] border-[#E8DDC9]"
+                  }`}
+                >
+                  Historique global
+                </button>
               </div>
             </div>
+          )}
 
-            {/* Contenu selon type : Rapport ou Attestation */}
-            {docType === "rapport" ? (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="font-fraunces text-xl font-bold text-[#1F1A15]">
-                    Rapport financier — {monthName}
-                  </h2>
-                  <p className="text-xs text-[#8A8884]">
-                    Synthèse confidentielle de gestion budgétaire personnelle.
-                  </p>
-                </div>
+          {/* Options additionnelles */}
+          <div className="space-y-2 pt-2 border-t border-[#E8DDC9]">
+            <label className="block text-[11px] font-semibold text-[#8A8884] uppercase tracking-wider">
+              Contenu du document
+            </label>
+            <div className="space-y-1.5 text-xs text-[#55534F]">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={includeGoals}
+                  onChange={(e) => setIncludeGoals(e.target.checked)}
+                  className="rounded border-[#E8DDC9] text-[#B5541F] focus:ring-[#B5541F]"
+                />
+                <span>Inclure la progression des objectifs et Cauris d'or</span>
+              </label>
 
-                {/* Résumé en 4 chiffres clés */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3 bg-[#FAF6EF] rounded-[10px] border border-[#E8DDC9]">
-                    <span className="text-[10px] text-[#8A8884] uppercase block">Entrées</span>
-                    <span className="text-sm font-bold font-fraunces text-[#4A6B3F] tab-num">
-                      {formatFCFA(totalIncome)}
-                    </span>
-                  </div>
-                  <div className="p-3 bg-[#FAF6EF] rounded-[10px] border border-[#E8DDC9]">
-                    <span className="text-[10px] text-[#8A8884] uppercase block">Dépenses</span>
-                    <span className="text-sm font-bold font-fraunces text-[#B5541F] tab-num">
-                      {formatFCFA(totalSpent)}
-                    </span>
-                  </div>
-                  <div className="p-3 bg-[#FAF6EF] rounded-[10px] border border-[#E8DDC9]">
-                    <span className="text-[10px] text-[#8A8884] uppercase block">Épargne cumulée</span>
-                    <span className="text-sm font-bold font-fraunces text-[#C9922E] tab-num">
-                      {formatFCFA(totalSavedInGoals)}
-                    </span>
-                  </div>
-                  <div className="p-3 bg-[#FAF6EF] rounded-[10px] border border-[#E8DDC9]">
-                    <span className="text-[10px] text-[#8A8884] uppercase block">Cauris dorés</span>
-                    <span className="text-sm font-bold font-fraunces text-[#C9922E] tab-num">
-                      {completedGoalsCount} atteints
-                    </span>
-                  </div>
-                </div>
+              {docType === "rapport" && (
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includeDetails}
+                    onChange={(e) => setIncludeDetails(e.target.checked)}
+                    className="rounded border-[#E8DDC9] text-[#B5541F] focus:ring-[#B5541F]"
+                  />
+                  <span>Inclure le relevé détaillé ligne par ligne</span>
+                </label>
+              )}
 
-                {/* Tableau sobre des dépenses */}
-                <div>
-                  <h3 className="font-fraunces text-sm font-semibold mb-2">
-                    Détail des dépenses enregistrées ({filteredExpenses.length})
-                  </h3>
-                  {filteredExpenses.length === 0 ? (
-                    <p className="text-xs text-[#8A8884] italic p-4 bg-[#FAF6EF] rounded-lg">
-                      Aucune dépense enregistrée sur cette période.
-                    </p>
-                  ) : (
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-[#E8DDC9] text-[#8A8884]">
-                          <th className="py-2">Date</th>
-                          <th className="py-2">Libellé</th>
-                          <th className="py-2">Catégorie</th>
-                          <th className="py-2 text-right">Montant</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#E8DDC9]/50">
-                        {filteredExpenses.slice(0, 15).map((exp) => {
-                          const cat = state.categories.find((c) => c.id === exp.categoryId);
-                          return (
-                            <tr key={exp.id}>
-                              <td className="py-2 text-[#8A8884]">
-                                {new Date(exp.timestamp).toLocaleDateString("fr-FR", {
-                                  day: "2-digit",
-                                  month: "short",
-                                })}
-                              </td>
-                              <td className="py-2 font-medium">{exp.label || "Dépense courante"}</td>
-                              <td className="py-2">
-                                <span className="inline-flex items-center gap-1">
-                                  <span
-                                    className="w-2 h-2 rounded-full inline-block"
-                                    style={{ backgroundColor: cat?.color || "#8A8884" }}
-                                  />
-                                  <span>{cat?.name || "Autre"}</span>
-                                </span>
-                              </td>
-                              <td className="py-2 text-right font-medium tab-num">
-                                {formatFCFA(exp.amount)}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-[#1F1A15] font-bold">
-                          <td colSpan={3} className="py-2.5">
-                            Total dépenses
-                          </td>
-                          <td className="py-2.5 text-right font-fraunces text-sm tab-num">
-                            {formatFCFA(totalSpent)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  )}
-                </div>
-
-                {/* Progrès des Objectifs */}
-                {state.goals.length > 0 && (
-                  <div>
-                    <h3 className="font-fraunces text-sm font-semibold mb-2">
-                      Progrès des objectifs d'épargne
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {state.goals.map((g) => (
-                        <div
-                          key={g.id}
-                          className="p-2.5 rounded-lg border border-[#E8DDC9] bg-[#FAF6EF] text-xs flex justify-between items-center"
-                        >
-                          <div>
-                            <span className="font-semibold block">{g.name}</span>
-                            <span className="text-[11px] text-[#8A8884]">
-                              {formatFCFA(g.currentAmount)} / {formatFCFA(g.targetAmount)}
-                            </span>
-                          </div>
-                          <span className="font-fraunces font-bold text-[#C9922E]">
-                            {Math.round((g.currentAmount / g.targetAmount) * 100)}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div className="flex items-center gap-2 text-[#4A6B3F] text-[11px] mt-1 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Sceau d'authenticité et empreinte numérique locale inclus</span>
               </div>
-            ) : (
-              /* Attestation d'épargne formelle (bailleur, banque, tuteur) */
-              <div className="space-y-6 py-4">
-                <div className="text-center py-4 border-b border-[#E8DDC9]">
-                  <h2 className="font-fraunces text-2xl font-bold text-[#1F1A15]">
-                    ATTESTATION D'ÉPARGNE ET DE DISCIPLINE BUDGÉTAIRE
-                  </h2>
-                  <p className="text-xs text-[#8A8884] mt-1">
-                    Document officiel pour présentation à un tiers (bailleur, tuteur, établissement)
-                  </p>
+            </div>
+          </div>
+
+          {/* Message de succès */}
+          <AnimatePresence>
+            {downloadSuccess && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="p-3 bg-[#4A6B3F]/10 border border-[#4A6B3F]/30 rounded-[12px] flex items-center gap-2.5 text-xs text-[#4A6B3F]"
+              >
+                <Sparkles className="w-4 h-4 shrink-0" />
+                <div className="flex-1">
+                  <p className="font-semibold">Téléchargement réussi !</p>
+                  <p className="text-[10px] text-[#55534F] truncate">{downloadSuccess}</p>
                 </div>
-
-                <div className="text-xs leading-relaxed text-[#1F1A15] space-y-4">
-                  <p>
-                    Je soussigné(e), <strong>{state.profile.name || "l'étudiant"}</strong>, atteste
-                    sur l'honneur tenir avec rigueur la mémoire financière de mes dépenses et de mes
-                    engagements au moyen de l'application NAFA.
-                  </p>
-
-                  <div className="bg-[#FAF6EF] p-4 rounded-lg border border-[#E8DDC9] space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-[#8A8884]">Montant total épargné à ce jour :</span>
-                      <strong className="text-[#4A6B3F] font-fraunces text-sm">
-                        {formatFCFA(totalSavedInGoals)}
-                      </strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#8A8884]">Objectifs validés :</span>
-                      <strong>{completedGoalsCount} projet(s) concrétisé(s)</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#8A8884]">Méthode de gestion :</span>
-                      <span>Plafond quotidien dynamique et arrondi systématique</span>
-                    </div>
-                  </div>
-
-                  <p>
-                    Cette attestation est établie pour servir et valoir ce que de droit, dans le cadre de
-                    justifications auprès d'un parent, d'un bailleur ou d'un organisme partenaire.
-                  </p>
-
-                  <div className="pt-8 flex justify-between items-end border-t border-[#E8DDC9]/60">
-                    <div>
-                      <span className="text-[10px] text-[#8A8884] block">Sceau numérique NAFA</span>
-                      <CaurisIcon size={28} color="#C9922E" filled />
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-[#8A8884] block mb-6">Signature :</span>
-                      <span className="font-fraunces text-sm italic">{state.profile.name}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              </motion.div>
             )}
+          </AnimatePresence>
 
-            {/* Note d'intégrité et Proverbe en pied de page */}
-            <div className="mt-8 pt-4 border-t border-[#E8DDC9] text-center">
-              <p className="text-[10px] text-[#8A8884] italic mb-1">
-                "Ce que tu gardes aujourd'hui te nourrira demain."
-              </p>
-              <p className="text-[9px] text-[#8A8884]/80">
-                Ce document a été généré par NAFA à ta demande. Aucune donnée n'a quitté ton téléphone.
-              </p>
-            </div>
-
-            {/* Frise inférieure bogolan */}
-            <div className="mt-4">
-              <BogolanFrise color="#C9922E" height={6} />
-            </div>
+          {/* Bouton d'action principal pleine largeur */}
+          <div className="pt-2">
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.01 }}
+              type="button"
+              disabled={isGenerating}
+              onClick={handleDownload}
+              className={`w-full py-3.5 px-4 rounded-[14px] text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md transition-all ${
+                isGenerating
+                  ? "bg-[#8A8884] cursor-not-allowed"
+                  : "bg-[#B5541F] hover:bg-[#A04514] active:bg-[#8F3B0E]"
+              }`}
+            >
+              {isGenerating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <span>Génération vectorielle A4...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Télécharger le PDF officiel (A4)</span>
+                </>
+              )}
+            </motion.button>
+            <p className="text-center text-[10px] text-[#8A8884] mt-2">
+              Le document PDF sera enregistré directement dans les téléchargements de ton appareil.
+            </p>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };
