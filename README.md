@@ -42,16 +42,23 @@ Application web moderne de gestion budgétaire et d'épargne conçue pour les é
 | `npm run start` | Démarrage du serveur de production compilé (`node dist/server.cjs`) |
 | `npm run preview` | Prévisualisation du build Vite statique |
 
-## Intégration Continue (GitHub Actions)
+## Intégration Continue & Compilation APK (GitHub Actions)
 
-Le dépôt intègre deux workflows automatisés sous `.github/workflows/` :
+Le dépôt intègre trois workflows automatisés sous `.github/workflows/` :
 
-1. **`ci.yml` (Build & Verification)** :
+1. **`build-apk.yml` (Compilation APK Android)** :
+   - Déclenché automatiquement lors de chaque `push` sur `main` / `master`, lors de la création d'un tag de version (`v*`), ou manuellement via l'onglet **Actions > Build Android APK > Run workflow**.
+   - Configure automatiquement l'environnement Java JDK 21, Node.js 20, le SDK Android et Gradle.
+   - Compile l'application React/Vite en bundle web de production et synchronise Capacitor Android.
+   - Génère l'**APK Debug** et l'**APK Release** prêts à être installés directement sur smartphone Android.
+   - Met à disposition les fichiers APK téléchargeables sous forme d'artefacts GitHub Actions (`nafa-app-debug-apk` et `nafa-app-release-apk`).
+
+2. **`ci.yml` (Build & Verification)** :
    - Exécuté automatiquement à chaque `push` et `pull_request` sur les branches `main` et `master`.
    - Lance `npm ci`, puis le linting de typechecking (`npm run lint`), puis la compilation de production (`npm run build`).
    - Archive automatiquement le bundle compilé `dist/` en artefact téléchargeable.
 
-2. **`deploy-pages.yml` (Déploiement GitHub Pages)** :
+3. **`deploy-pages.yml` (Déploiement GitHub Pages)** :
    - Permet de publier en un clic ou lors d'un push l'interface client SPA statique sur GitHub Pages.
 
 ## Structure du projet

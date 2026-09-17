@@ -1,0 +1,84 @@
+name: Compilation APK Android (Release & Debug)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Type de build Android'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - 'debug'
+          - 'release'
+          - 'both'
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupération du code source (Checkout)
+        uses: actions/checkout@v4
+
+      - name: Configuration de Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Configuration de Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Installation des dépendances NPM
+        run: npm ci
+
+      - name: Compilation de l'application web (Vite production)
+        run: npm run build:client
+        env:
+          NODE_ENV: production
+
+      - name: Synchronisation Capacitor Android
+        run: npx cap sync android
+
+      - name: Rendre gradlew exécutable
+        run: chmod +x android/gradlew
+
+      - name: Compilation APK Debug
+        if: ${{ github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' || github.event_name == 'push' }}
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Compilation APK Release (Non signée ou signée)
+        if: ${{ github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'both' || startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Mise à disposition APK Debug
+        if: ${{ github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' || github.event_name == 'push' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nafa-app-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Mise à disposition APK Release
+        if: ${{ github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'both' || startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nafa-app-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 14

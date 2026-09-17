@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NAFA</string>
+    <string name="title_activity_main">NAFA</string>
+    <string name="package_name">bf.nafa.app</string>
+    <string name="custom_url_scheme">bf.nafa.app</string>
+</resources>
