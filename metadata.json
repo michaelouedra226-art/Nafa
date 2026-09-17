@@ -1,0 +1,6 @@
+{
+  "name": "NAFA",
+  "description": "Compagnon d'épargne pour étudiants burkinabè. Chaque franc compte. Chaque pas rapproche.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
