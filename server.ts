@@ -21,6 +21,30 @@ function getAIClient(): GoogleGenAI | null {
   return aiClient;
 }
 
+function pcmToWav(pcmBase64: string, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): string {
+  const pcmBuffer = Buffer.from(pcmBase64, "base64");
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const dataSize = pcmBuffer.length;
+  const wavHeader = Buffer.alloc(44);
+
+  wavHeader.write("RIFF", 0);
+  wavHeader.writeUInt32LE(36 + dataSize, 4);
+  wavHeader.write("WAVE", 8);
+  wavHeader.write("fmt ", 12);
+  wavHeader.writeUInt32LE(16, 16); // subchunk1size (16 for PCM)
+  wavHeader.writeUInt16LE(1, 20); // audioFormat (1 for PCM)
+  wavHeader.writeUInt16LE(numChannels, 22);
+  wavHeader.writeUInt32LE(sampleRate, 24);
+  wavHeader.writeUInt32LE(byteRate, 28);
+  wavHeader.writeUInt16LE(blockAlign, 32);
+  wavHeader.writeUInt16LE(bitsPerSample, 34);
+  wavHeader.write("data", 36);
+  wavHeader.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([wavHeader, pcmBuffer]).toString("base64");
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: "5mb" }));
@@ -65,9 +89,21 @@ async function startServer() {
       const inlineData = part?.inlineData;
 
       if (inlineData && inlineData.data) {
+        let finalAudioData = inlineData.data;
+        let finalMimeType = inlineData.mimeType || "audio/wav";
+
+        // Convert raw L16 PCM to standard WAV container
+        if (finalMimeType.includes("l16") || finalMimeType.includes("pcm")) {
+          // Extract sample rate if present (e.g. rate=24000)
+          const rateMatch = finalMimeType.match(/rate=(\d+)/);
+          const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+          finalAudioData = pcmToWav(finalAudioData, sampleRate);
+          finalMimeType = "audio/wav";
+        }
+
         return res.json({
-          audioData: inlineData.data,
-          mimeType: inlineData.mimeType || "audio/wav",
+          audioData: finalAudioData,
+          mimeType: finalMimeType,
         });
       }
 

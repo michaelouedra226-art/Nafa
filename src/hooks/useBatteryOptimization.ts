@@ -41,7 +41,6 @@ export function useBatteryOptimization() {
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange, { passive: true });
-    window.addEventListener("blur", handlePause, { passive: true });
     window.addEventListener("pagehide", handlePause, { passive: true });
 
     // 3. Écouteur d'état natif Capacitor Android (cycle de vie Android onPause / onStop)
@@ -62,7 +61,6 @@ export function useBatteryOptimization() {
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handlePause);
       window.removeEventListener("pagehide", handlePause);
       if (removeCapStateListener) {
         removeCapStateListener();

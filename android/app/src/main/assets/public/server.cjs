@@ -41,6 +41,27 @@ function getAIClient() {
   }
   return aiClient;
 }
+function pcmToWav(pcmBase64, sampleRate = 24e3, numChannels = 1, bitsPerSample = 16) {
+  const pcmBuffer = Buffer.from(pcmBase64, "base64");
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  const blockAlign = numChannels * bitsPerSample / 8;
+  const dataSize = pcmBuffer.length;
+  const wavHeader = Buffer.alloc(44);
+  wavHeader.write("RIFF", 0);
+  wavHeader.writeUInt32LE(36 + dataSize, 4);
+  wavHeader.write("WAVE", 8);
+  wavHeader.write("fmt ", 12);
+  wavHeader.writeUInt32LE(16, 16);
+  wavHeader.writeUInt16LE(1, 20);
+  wavHeader.writeUInt16LE(numChannels, 22);
+  wavHeader.writeUInt32LE(sampleRate, 24);
+  wavHeader.writeUInt32LE(byteRate, 28);
+  wavHeader.writeUInt16LE(blockAlign, 32);
+  wavHeader.writeUInt16LE(bitsPerSample, 34);
+  wavHeader.write("data", 36);
+  wavHeader.writeUInt32LE(dataSize, 40);
+  return Buffer.concat([wavHeader, pcmBuffer]).toString("base64");
+}
 async function startServer() {
   const app = (0, import_express.default)();
   app.use(import_express.default.json({ limit: "5mb" }));
@@ -76,9 +97,17 @@ async function startServer() {
       const part = candidate?.content?.parts?.[0];
       const inlineData = part?.inlineData;
       if (inlineData && inlineData.data) {
+        let finalAudioData = inlineData.data;
+        let finalMimeType = inlineData.mimeType || "audio/wav";
+        if (finalMimeType.includes("l16") || finalMimeType.includes("pcm")) {
+          const rateMatch = finalMimeType.match(/rate=(\d+)/);
+          const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24e3;
+          finalAudioData = pcmToWav(finalAudioData, sampleRate);
+          finalMimeType = "audio/wav";
+        }
         return res.json({
-          audioData: inlineData.data,
-          mimeType: inlineData.mimeType || "audio/wav"
+          audioData: finalAudioData,
+          mimeType: finalMimeType
         });
       }
       return res.status(502).json({
