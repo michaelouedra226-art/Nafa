@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { AppState } from "../../types";
-import { CaurisIcon } from "../icons/CustomIcons";
-import { generateNafaPdf, PdfGenerationOptions } from "../../utils/pdfGenerator";
-import { FileText, Award, Download, X, Check, Calendar, CheckSquare, Square, ShieldCheck, Sparkles } from "lucide-react";
+import { generateNafaPdf, PdfGenerationOptions, PdfExportResult } from "../../utils/pdfGenerator";
+import { FileText, Award, Download, X, Check, ShieldCheck, Sparkles, ExternalLink, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 
@@ -17,42 +16,46 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }
   const [includeDetails, setIncludeDetails] = useState<boolean>(true);
   const [includeGoals, setIncludeGoals] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
+  const [exportResult, setExportResult] = useState<PdfExportResult | null>(null);
 
   const userName = (state.profile.name && state.profile.name.trim()) || "Michael";
   const now = new Date();
   const currentMonthName = now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     setIsGenerating(true);
-    setDownloadSuccess(null);
+    setExportResult(null);
 
-    setTimeout(() => {
-      try {
-        const options: PdfGenerationOptions = {
-          docType,
-          period,
-          includeDetails,
-          includeGoals,
-        };
+    try {
+      const options: PdfGenerationOptions = {
+        docType,
+        period,
+        includeDetails,
+        includeGoals,
+      };
 
-        const fileName = generateNafaPdf(state, options);
-        setIsGenerating(false);
-        setDownloadSuccess(fileName);
+      const result = await generateNafaPdf(state, options);
+      setIsGenerating(false);
+      setExportResult(result);
 
-        // Effet de célébration
-        confetti({
-          particleCount: 40,
-          spread: 55,
-          origin: { y: 0.7 },
-          colors: ["#B5541F", "#C9922E", "#4A6B3F", "#1E2A44"],
-        });
-      } catch (err) {
-        console.error("Erreur de génération PDF:", err);
-        setIsGenerating(false);
-        alert("Une erreur est survenue lors de la création du fichier PDF.");
-      }
-    }, 450);
+      // Effet de célébration
+      confetti({
+        particleCount: 40,
+        spread: 55,
+        origin: { y: 0.7 },
+        colors: ["#B5541F", "#C9922E", "#4A6B3F", "#1E2A44"],
+      });
+    } catch (err) {
+      console.error("Erreur de génération PDF:", err);
+      setIsGenerating(false);
+      alert("Une erreur est survenue lors de la création du fichier PDF.");
+    }
+  };
+
+  const handleOpenPdf = () => {
+    if (exportResult?.blobUrl) {
+      window.open(exportResult.blobUrl, "_blank");
+    }
   };
 
   return (
@@ -104,7 +107,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }
           {/* Choix du type de document (2 cartes distinctes) */}
           <div className="space-y-2">
             <label className="block text-[11px] font-semibold text-[#8A8884] uppercase tracking-wider">
-              Type de document à télécharger
+              Type de document à exporter
             </label>
 
             <div className="grid grid-cols-1 gap-2.5">
@@ -127,7 +130,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }
                     {docType === "rapport" && <Check className="w-4 h-4 text-[#B5541F]" />}
                   </div>
                   <p className="text-[11px] text-[#8A8884] mt-0.5 leading-relaxed">
-                    Bilan complet : revenus, dépenses, catégorisation et solde restant. Parfait pour faire le point personnel ou présenter aux parents.
+                    Bilan complet : revenus, dépenses, catégorisation et solde restant. Avec logo officiel et bordures en motifs africains.
                   </p>
                 </div>
               </button>
@@ -151,7 +154,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }
                     {docType === "attestation" && <Check className="w-4 h-4 text-[#C9922E]" />}
                   </div>
                   <p className="text-[11px] text-[#8A8884] mt-0.5 leading-relaxed">
-                    Certificat solennel avec sceau NAFA pour bailleurs (logement), tuteurs ou banques attestant de ta capacité d'épargne et régularité.
+                    Certificat solennel avec sceau NAFA, logo et encadrement traditionnel Mossi/Bogolan pour bailleurs ou banques.
                   </p>
                 </div>
               </button>
@@ -194,7 +197,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }
           {/* Options additionnelles */}
           <div className="space-y-2 pt-2 border-t border-[#E8DDC9]">
             <label className="block text-[11px] font-semibold text-[#8A8884] uppercase tracking-wider">
-              Contenu du document
+              Contenu et finitions graphiques
             </label>
             <div className="space-y-1.5 text-xs text-[#55534F]">
               <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -221,31 +224,55 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }
 
               <div className="flex items-center gap-2 text-[#4A6B3F] text-[11px] mt-1 font-medium">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Sceau d'authenticité et empreinte numérique locale inclus</span>
+                <span>Bordures en motifs africains & logo officiel inclus</span>
               </div>
             </div>
           </div>
 
-          {/* Message de succès */}
+          {/* Message de succès et actions directes */}
           <AnimatePresence>
-            {downloadSuccess && (
+            {exportResult && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="p-3 bg-[#4A6B3F]/10 border border-[#4A6B3F]/30 rounded-[12px] flex items-center gap-2.5 text-xs text-[#4A6B3F]"
+                className="p-3.5 bg-[#4A6B3F]/10 border border-[#4A6B3F]/30 rounded-[14px] space-y-2.5 text-xs text-[#4A6B3F]"
               >
-                <Sparkles className="w-4 h-4 shrink-0" />
-                <div className="flex-1">
-                  <p className="font-semibold">Téléchargement réussi !</p>
-                  <p className="text-[10px] text-[#55534F] truncate">{downloadSuccess}</p>
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-4 h-4 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-semibold">
+                      {exportResult.isNative ? "Document généré et partagé !" : "Téléchargement lancé avec succès !"}
+                    </p>
+                    <p className="text-[10px] text-[#55534F] truncate">{exportResult.fileName}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleOpenPdf}
+                    className="flex-1 py-2 px-3 rounded-[10px] bg-[#4A6B3F] text-white font-medium text-xs flex items-center justify-center gap-1.5 shadow-xs hover:bg-[#3E5C35] transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Ouvrir / Voir le PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="py-2 px-3 rounded-[10px] bg-white border border-[#4A6B3F]/40 text-[#4A6B3F] font-medium text-xs flex items-center justify-center gap-1 hover:bg-[#FAF6EF] transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Re-télécharger</span>
+                  </button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* Bouton d'action principal pleine largeur */}
-          <div className="pt-2">
+          <div className="pt-1">
             <motion.button
               whileTap={{ scale: 0.98 }}
               whileHover={{ scale: 1.01 }}
@@ -271,7 +298,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }
               )}
             </motion.button>
             <p className="text-center text-[10px] text-[#8A8884] mt-2">
-              Le document PDF sera enregistré directement dans les téléchargements de ton appareil.
+              Le document PDF contient l'encadrement en motifs africains, le logo NAFA et la signature certifiée.
             </p>
           </div>
         </div>
