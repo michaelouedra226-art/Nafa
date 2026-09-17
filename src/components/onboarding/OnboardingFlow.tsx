@@ -55,6 +55,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
   }, [step]);
 
+  // Interception de la touche retour pour reculer d'étape dans l'onboarding
+  useEffect(() => {
+    const handleBackStep = (e: Event) => {
+      const customEv = e as CustomEvent;
+      if (step > 1) {
+        setStep((s) => s - 1);
+        customEv.detail?.markHandled?.();
+      }
+    };
+    window.addEventListener("nafa:back-step", handleBackStep);
+    return () => window.removeEventListener("nafa:back-step", handleBackStep);
+  }, [step]);
+
   const handleSkipSplash = () => {
     if (step === 0) setStep(1);
   };

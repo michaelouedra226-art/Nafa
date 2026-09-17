@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AppProfile, AppState, Expense, Goal, Income, QuickTile, Debt, Tontine } from "./types";
 import { loadAppState, saveAppState, resetAppState, DEFAULT_APP_STATE } from "./utils/storage";
@@ -15,6 +15,8 @@ import { PdfExportModal } from "./components/modals/PdfExportModal";
 import { CelebrationModal } from "./components/modals/CelebrationModal";
 import { CaurisIcon } from "./components/icons/CustomIcons";
 import { Sun, Target, BookOpen, Clock, Plus, Check } from "lucide-react";
+import { useBackButton } from "./hooks/useBackButton";
+import { useBatteryOptimization } from "./hooks/useBatteryOptimization";
 
 export function App() {
   const [state, setState] = useState<AppState>(() => loadAppState());
@@ -40,8 +42,74 @@ export function App() {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 2600);
+    }, 2400);
   };
+
+  // 1. Optimisation batterie & extinction des activités en arrière-plan
+  useBatteryOptimization();
+
+  // 2. Gestion hiérarchique de fermeture des modals pour la touche retour
+  const isModalOpen = Boolean(
+    showSetPocketModal ||
+    celebrationGoal ||
+    showPdfModal ||
+    showSettings ||
+    showCatchUp ||
+    showNewIncome ||
+    showNewExpense
+  );
+
+  const closeTopModal = useCallback((): boolean => {
+    if (showSetPocketModal) {
+      setShowSetPocketModal(false);
+      return true;
+    }
+    if (celebrationGoal) {
+      setCelebrationGoal(null);
+      return true;
+    }
+    if (showPdfModal) {
+      setShowPdfModal(false);
+      return true;
+    }
+    if (showSettings) {
+      setShowSettings(false);
+      return true;
+    }
+    if (showCatchUp) {
+      setShowCatchUp(false);
+      return true;
+    }
+    if (showNewIncome) {
+      setShowNewIncome(false);
+      return true;
+    }
+    if (showNewExpense) {
+      setShowNewExpense(false);
+      return true;
+    }
+    return false;
+  }, [
+    showSetPocketModal,
+    celebrationGoal,
+    showPdfModal,
+    showSettings,
+    showCatchUp,
+    showNewIncome,
+    showNewExpense,
+  ]);
+
+  // 3. Gestionnaire universel de la touche retour :
+  // - 1 clic : retour arrière (fermer modal/sous-dialogue ou revenir sur l'onglet d'accueil)
+  // - 2 clics sur l'accueil (< 2000 ms) : quitter l'application
+  useBackButton({
+    activeTab,
+    setActiveTab,
+    isModalOpen,
+    closeTopModal,
+    onboardingCompleted: state.profile.onboardingCompleted,
+    onShowToast: showToast,
+  });
 
   // Synchronisation avec localStorage
   useEffect(() => {
@@ -453,8 +521,18 @@ export function App() {
       >
         {/* Toast flottant discret */}
         {toastMessage && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-70 flex items-center gap-1.5 px-4 py-2 bg-[#1F1A15] text-[#FAF6EF] rounded-full text-xs font-medium shadow-lg animate-fade-in pointer-events-none">
-            <Check className="w-3.5 h-3.5 text-[#4A6B3F]" />
+          <div
+            className={`fixed left-1/2 -translate-x-1/2 z-70 flex items-center gap-2 px-4 py-2.5 bg-[#1F1A15]/95 text-[#FAF6EF] border border-[#E8DDC9]/20 rounded-full text-xs font-medium shadow-2xl backdrop-blur-sm pointer-events-none transition-all animate-fade-in ${
+              toastMessage.includes("quitter") || toastMessage.includes("Fermeture")
+                ? "bottom-24"
+                : "top-4"
+            }`}
+          >
+            {toastMessage.includes("quitter") || toastMessage.includes("Fermeture") ? (
+              <span className="w-2 h-2 rounded-full bg-[#C9922E] shrink-0" />
+            ) : (
+              <Check className="w-3.5 h-3.5 text-[#4A6B3F] shrink-0" />
+            )}
             <span>{toastMessage}</span>
           </div>
         )}

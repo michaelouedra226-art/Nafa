@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { AppState, Debt, Tontine } from "../../types";
 import { formatFCFA } from "../../utils/engine";
@@ -29,6 +29,22 @@ export const CarnetScreen: React.FC<CarnetScreenProps> = ({
   const [activeTab, setActiveTab] = useState<"debts" | "tontines">("debts");
   const [showAddDebtModal, setShowAddDebtModal] = useState(false);
   const [showAddTontineModal, setShowAddTontineModal] = useState(false);
+
+  // Gestion de la touche retour pour fermer les modaux locaux
+  useEffect(() => {
+    const handleScreenBack = (e: Event) => {
+      const customEv = e as CustomEvent;
+      if (showAddDebtModal) {
+        setShowAddDebtModal(false);
+        customEv.detail?.markHandled?.();
+      } else if (showAddTontineModal) {
+        setShowAddTontineModal(false);
+        customEv.detail?.markHandled?.();
+      }
+    };
+    window.addEventListener("nafa:screen-back", handleScreenBack);
+    return () => window.removeEventListener("nafa:screen-back", handleScreenBack);
+  }, [showAddDebtModal, showAddTontineModal]);
 
   // Formulaire dette
   const [debtPerson, setDebtPerson] = useState("");

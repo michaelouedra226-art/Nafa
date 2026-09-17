@@ -1,34 +1,59 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
-    android:viewportHeight="108"
-    android:viewportWidth="108">
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Rayons solaires géométriques fins -->
     <path
-        android:fillType="evenOdd"
-        android:pathData="M32,64C32,64 38.39,52.99 44.13,50.95C51.37,48.37 70.14,49.57 70.14,49.57L108.26,87.69L108,109.01L75.97,107.97L32,64Z"
-        android:strokeColor="#00000000"
-        android:strokeWidth="1">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:endX="78.5885"
-                android:endY="90.9159"
-                android:startX="48.7653"
-                android:startY="61.0927"
-                android:type="linear">
-                <item
-                    android:color="#44000000"
-                    android:offset="0.0" />
-                <item
-                    android:color="#00000000"
-                    android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
+        android:strokeColor="#C9922E"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.6"
+        android:pathData="M54,16 L54,24 M54,84 L54,92 M16,54 L24,54 M84,54 L92,54 M27,27 L33,33 M75,75 L81,81 M27,81 L33,75 M75,27 L81,33" />
+
+    <!-- Cercle ornemental doux -->
+    <path
+        android:strokeColor="#C9922E"
+        android:strokeWidth="1.2"
+        android:strokeAlpha="0.35"
+        android:pathData="M54,22 A32,32 0 1,1 53.9,22" />
+
+    <!-- Coquille externe galbée du Cauris en or -->
+    <path
+        android:fillColor="#D9A438"
+        android:pathData="M54,28 C41,28 34,39 34,54 C34,69 41,80 54,80 C67,80 74,69 74,54 C74,39 67,28 54,28 Z" />
+
+    <!-- Cœur sombre fendu -->
+    <path
+        android:fillColor="#17130F"
+        android:pathData="M54,32 C44,32 38,41 38,54 C38,67 44,76 54,76 C64,76 70,67 70,54 C70,41 64,32 54,32 Z" />
+
+    <!-- Lèvre gauche Cauris dorée -->
+    <path
+        android:fillColor="#F3D079"
+        android:pathData="M54,35 C46,37 43,45 43,54 C43,63 46,71 54,73 C51,68 50,61 50,54 C50,47 51,40 54,35 Z" />
+
+    <!-- Lèvre droite Cauris dorée -->
+    <path
+        android:fillColor="#F3D079"
+        android:pathData="M54,35 C62,37 65,45 65,54 C65,63 62,71 54,73 C57,68 58,61 58,54 C58,47 57,40 54,35 Z" />
+
+    <!-- Fente centrale sombre -->
+    <path
+        android:fillColor="#100C09"
+        android:pathData="M54,38 C52,43 51,48 51,54 C51,60 52,65 54,70 C56,65 57,60 57,54 C57,48 56,43 54,38 Z" />
+
+    <!-- Dents crantées du Cauris (monnaie traditionnelle) -->
+    <path
+        android:strokeColor="#B87B1D"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M50,44 L53,44 M55,44 L58,44 M49,49 L53,49 M55,49 L59,49 M49,54 L53,54 M55,54 L59,54 M49,59 L53,59 M55,59 L59,59 M50,64 L53,64 M55,64 L58,64" />
+
+    <!-- Éclat de brillance -->
     <path
         android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M66.94,46.02L66.94,46.02C72.44,50.07 76,56.61 76,64L32,64C32,56.61 35.56,50.11 40.98,46.06L36.18,41.19C35.45,40.45 35.45,39.3 36.18,38.56C36.91,37.81 38.05,37.81 38.78,38.56L44.25,44.05C47.18,42.57 50.48,41.71 54,41.71C57.48,41.71 60.78,42.57 63.68,44.05L69.11,38.56C69.84,37.81 70.98,37.81 71.71,38.56C72.44,39.3 72.44,40.45 71.71,41.19L66.94,46.02ZM62.94,56.92C64.08,56.92 65,56.01 65,54.88C65,53.76 64.08,52.85 62.94,52.85C61.8,52.85 60.88,53.76 60.88,54.88C60.88,56.01 61.8,56.92 62.94,56.92ZM45.06,56.92C46.2,56.92 47.13,56.01 47.13,54.88C47.13,53.76 46.2,52.85 45.06,52.85C43.92,52.85 43,53.76 43,54.88C43,56.01 43.92,56.92 45.06,56.92Z"
-        android:strokeColor="#00000000"
-        android:strokeWidth="1" />
+        android:fillAlpha="0.4"
+        android:pathData="M45,46 A3,8 20 1,1 44.9,46" />
 </vector>

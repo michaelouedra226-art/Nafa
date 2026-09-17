@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#241D17" />
+      <stop offset="50%" stop-color="#1A140F" />
+      <stop offset="100%" stop-color="#100C09" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F3D079" />
+      <stop offset="35%" stop-color="#D9A438" />
+      <stop offset="70%" stop-color="#B87B1D" />
+      <stop offset="100%" stop-color="#E2B855" />
+    </linearGradient>
+    <linearGradient id="terraGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D96F34" />
+      <stop offset="100%" stop-color="#963E14" />
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#C9922E" stop-opacity="0.35" />
+      <stop offset="60%" stop-color="#B5541F" stop-opacity="0.12" />
+      <stop offset="100%" stop-color="#17130F" stop-opacity="0" />
+    </radialGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Fond squircle moderne -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Bordure subtile -->
+  <rect x="6" y="6" width="500" height="500" rx="108" fill="none" stroke="url(#goldGrad)" stroke-width="3" stroke-opacity="0.25" />
+
+  <!-- Halo lumineux chaleureux -->
+  <circle cx="256" cy="256" r="190" fill="url(#sunGlow)" />
+
+  <!-- Rayons solaires géométriques fins du Sahel -->
+  <g stroke="url(#goldGrad)" stroke-width="3.5" stroke-linecap="round" opacity="0.6">
+    <line x1="256" y1="52" x2="256" y2="88" />
+    <line x1="256" y1="424" x2="256" y2="460" />
+    <line x1="52" y1="256" x2="88" y2="256" />
+    <line x1="424" y1="256" x2="460" y2="256" />
+
+    <line x1="112" y1="112" x2="138" y2="138" />
+    <line x1="374" y1="374" x2="400" y2="400" />
+    <line x1="112" y1="400" x2="138" y2="374" />
+    <line x1="374" y1="138" x2="400" y2="112" />
+
+    <!-- Points d'ornement cardinaux -->
+    <circle cx="256" cy="40" r="4" fill="url(#goldGrad)" />
+    <circle cx="256" cy="472" r="4" fill="url(#goldGrad)" />
+    <circle cx="40" cy="256" r="4" fill="url(#goldGrad)" />
+    <circle cx="472" cy="256" r="4" fill="url(#goldGrad)" />
+  </g>
+
+  <!-- Anneau ornemental délicat -->
+  <circle cx="256" cy="256" r="162" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-dasharray="8 6" stroke-opacity="0.3" />
+
+  <!-- Emblème Cauris doré central stylisé -->
+  <g filter="url(#glow)">
+    <!-- Coque externe galbée -->
+    <path d="M256,96 C182,96 140,165 140,256 C140,347 182,416 256,416 C330,416 372,347 372,256 C372,165 330,96 256,96 Z"
+          fill="url(#goldGrad)" />
+
+    <!-- Relief intérieur coquillage -->
+    <path d="M256,118 C198,118 162,175 162,256 C162,337 198,394 256,394 C314,394 350,337 350,256 C350,175 314,118 256,118 Z"
+          fill="#1A140F" />
+
+    <!-- Lèvre du cauris gauche -->
+    <path d="M256,134 C210,148 190,195 190,256 C190,317 210,364 256,378 C242,350 236,305 236,256 C236,207 242,162 256,134 Z"
+          fill="url(#goldGrad)" opacity="0.9" />
+
+    <!-- Lèvre du cauris droite -->
+    <path d="M256,134 C302,148 322,195 322,256 C322,317 302,364 256,378 C270,350 276,305 276,256 C276,207 270,162 256,134 Z"
+          fill="url(#goldGrad)" opacity="0.9" />
+
+    <!-- Fente centrale sombre -->
+    <path d="M256,150 C246,180 242,218 242,256 C242,294 246,332 256,362 C266,332 270,294 270,256 C270,218 266,180 256,150 Z"
+          fill="#0C0907" />
+
+    <!-- Dents traditionnelles du cauris gravées en or -->
+    <g stroke="url(#goldGrad)" stroke-width="3" stroke-linecap="round">
+      <line x1="238" y1="184" x2="252" y2="184" />
+      <line x1="260" y1="184" x2="274" y2="184" />
+
+      <line x1="235" y1="212" x2="251" y2="212" />
+      <line x1="261" y1="212" x2="277" y2="212" />
+
+      <line x1="234" y1="240" x2="250" y2="240" />
+      <line x1="262" y1="240" x2="278" y2="240" />
+
+      <line x1="234" y1="268" x2="250" y2="268" />
+      <line x1="262" y1="268" x2="278" y2="268" />
+
+      <line x1="235" y1="296" x2="251" y2="296" />
+      <line x1="261" y1="296" x2="277" y2="296" />
+
+      <line x1="238" y1="324" x2="252" y2="324" />
+      <line x1="260" y1="324" x2="274" y2="324" />
+    </g>
+
+    <!-- Éclat de lumière brillant sur le dos du cauris -->
+    <ellipse cx="205" cy="210" rx="14" ry="38" transform="rotate(-18 205 210)" fill="#FFFFFF" opacity="0.35" />
+    <circle cx="212" cy="188" r="4" fill="#FFFFFF" opacity="0.6" />
+  </g>
+</svg>

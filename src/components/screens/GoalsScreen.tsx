@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { AppState, Goal, GoalMode, GoalVisual } from "../../types";
@@ -25,6 +25,25 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
   const [showNewGoalModal, setShowNewGoalModal] = useState(false);
   const [selectedGoalForAdd, setSelectedGoalForAdd] = useState<Goal | null>(null);
   const [amountToAddStr, setAmountToAddStr] = useState("");
+
+  // Gestion de la touche retour pour fermer les dialogues internes
+  useEffect(() => {
+    const handleScreenBack = (e: Event) => {
+      const customEv = e as CustomEvent;
+      if (showNewGoalModal) {
+        setShowNewGoalModal(false);
+        customEv.detail?.markHandled?.();
+      } else if (showCaurisBoard) {
+        setShowCaurisBoard(false);
+        customEv.detail?.markHandled?.();
+      } else if (selectedGoalForAdd) {
+        setSelectedGoalForAdd(null);
+        customEv.detail?.markHandled?.();
+      }
+    };
+    window.addEventListener("nafa:screen-back", handleScreenBack);
+    return () => window.removeEventListener("nafa:screen-back", handleScreenBack);
+  }, [showNewGoalModal, showCaurisBoard, selectedGoalForAdd]);
 
   // Nouveaux champs pour création d'objectif
   const [newGoalName, setNewGoalName] = useState("");

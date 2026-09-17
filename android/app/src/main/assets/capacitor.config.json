@@ -2,7 +2,6 @@
 	"appId": "bf.nafa.app",
 	"appName": "NAFA",
 	"webDir": "dist",
-	"bundledWebRuntime": false,
 	"server": {
 		"androidScheme": "https",
 		"cleartext": false

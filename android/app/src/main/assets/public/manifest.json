@@ -1,0 +1,29 @@
+{
+  "short_name": "NAFA",
+  "name": "NAFA — Compagnon d'épargne pour étudiants burkinabè",
+  "description": "Chaque franc compte. Chaque pas rapproche. Gestion budgétaire adaptée à la réalité estudiantine burkinabè.",
+  "icons": [
+    {
+      "src": "/favicon-32x32.png",
+      "type": "image/png",
+      "sizes": "32x32"
+    },
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#17130F",
+  "theme_color": "#FAF6EF",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "fr-FR"
+}
