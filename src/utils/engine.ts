@@ -1,4 +1,4 @@
-import { AppState, Goal } from "../types";
+import { AppState, Goal, DailyChallenge } from "../types";
 
 export interface DailyAllowanceResult {
   dailyAllowance: number;
@@ -145,6 +145,52 @@ export function formatFCFA(amount: number): string {
   return `${rounded.toLocaleString("fr-FR")} F`;
 }
 
+/**
+ * Formatage strict des montants pour le document PDF (Section 4.2 du Cahier Technique)
+ * Utilise des espaces réguliers et termine par " F".
+ */
+export function formatAmountPDF(amount: number): string {
+  return (
+    Math.round(amount)
+      .toString()
+      .replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " F"
+  );
+}
+
+/**
+ * Analyse du mode observation : propose un budget après 7 jours
+ */
+export function computeObservationBudgetSuggestion(state: AppState): {
+  isEligible: boolean;
+  daysObserved: number;
+  averageDailySpent: number;
+  suggestedBudget: number;
+} {
+  const start =
+    state.profile.observationStartTimestamp ||
+    state.profile.lastOpenedTimestamp - 7 * 86400000;
+  const daysObserved = Math.max(1, Math.floor((Date.now() - start) / 86400000));
+  const isEligible = Boolean(state.profile.observationMode && daysObserved >= 7);
+
+  const totalSpentInPeriod = state.expenses
+    .filter((e) => e.timestamp >= start)
+    .reduce((s, e) => s + e.amount, 0);
+
+  const averageDailySpent = Math.round(totalSpentInPeriod / daysObserved);
+  const unit = state.profile.smallestDenomination || 100;
+  const suggestedBudget = Math.max(
+    unit,
+    Math.round(averageDailySpent / unit) * unit
+  );
+
+  return {
+    isEligible,
+    daysObserved,
+    averageDailySpent,
+    suggestedBudget,
+  };
+}
+
 export function calculateRoundUp(amount: number, unit: number = 100): { targetRounded: number; diff: number } {
   if (amount <= 0) return { targetRounded: 0, diff: 0 };
   const remainder = amount % unit;
@@ -206,3 +252,286 @@ export function getRandomProverb(): string {
   const idx = Math.floor(Math.random() * AFRICAN_PROVERBS.length);
   return AFRICAN_PROVERBS[idx];
 }
+
+/**
+ * Génère ou récupère l'objectif / micro-défi contextuel du jour
+ */
+export const DAILY_CHALLENGES_CATALOG: { title: string; estimatedSavings: number }[] = [
+  { title: "Aujourd'hui : cuisine au lieu d'acheter dehors.", estimatedSavings: 1000 },
+  { title: "Zéro dépense superflue ou boisson sucrée aujourd'hui.", estimatedSavings: 500 },
+  { title: "Déplace-toi à pied ou partage ton trajet si la distance le permet.", estimatedSavings: 600 },
+  { title: "Prépare ta bouteille d'eau au lieu d'acheter des sachets en route.", estimatedSavings: 300 },
+  { title: "Reporte tout achat non vital d'au moins 24 heures.", estimatedSavings: 1500 },
+  { title: "Ne sors pas d'argent liquide supplémentaire aujourd'hui.", estimatedSavings: 1000 },
+  { title: "Garde la monnaie de la journée intacte pour tes projets.", estimatedSavings: 400 },
+];
+
+export function getOrGenerateTodayChallenge(state: AppState, date: Date = new Date()): DailyChallenge {
+  const dateKey = date.toISOString().slice(0, 10);
+  const existing = state.dailyChallenges?.find((c) => c.dateKey === dateKey);
+  if (existing) {
+    return existing;
+  }
+
+  // Calcul déterministe basé sur le jour de l'année pour varier chaque jour
+  const startOfYear = new Date(date.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((date.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
+  const template = DAILY_CHALLENGES_CATALOG[dayOfYear % DAILY_CHALLENGES_CATALOG.length];
+
+  return {
+    id: `challenge_${dateKey}`,
+    dateKey,
+    title: template.title,
+    estimatedSavings: template.estimatedSavings,
+    status: "pending",
+  };
+}
+
+/**
+ * 2.1 Radar de fin de mois : projection intelligente du solde au dernier jour du mois
+ */
+export interface EndOfMonthRadarResult {
+  projectedBalance: number;
+  lastDayOfMonth: number;
+  daysRemaining: number;
+  status: "green" | "orange" | "red";
+  statusColor: string;
+  shortPhrase: string;
+  detailsPhrase: string;
+}
+
+export function computeEndOfMonthRadar(state: AppState): EndOfMonthRadarResult {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const lastDate = new Date(year, month + 1, 0);
+  const lastDayOfMonth = lastDate.getDate();
+  const currentDay = now.getDate();
+  const daysRemaining = Math.max(1, lastDayOfMonth - currentDay + 1);
+
+  // Solde disponible actuel
+  const monthlySpent = state.expenses
+    .filter((e) => isCurrentMonth(e.timestamp, now))
+    .reduce((sum, e) => sum + e.amount, 0);
+  const monthlyIncome = state.incomes
+    .filter((i) => isCurrentMonth(i.timestamp, now))
+    .reduce((sum, i) => sum + i.amount, 0);
+
+  const currentBalance =
+    state.profile.pocketBalance !== undefined && state.profile.pocketBalance !== null
+      ? state.profile.pocketBalance
+      : Math.max(0, monthlyIncome - monthlySpent);
+
+  // Cadence quotidienne observée sur les 7 derniers jours (ou depuis le début du mois)
+  const sevenDaysAgo = now.getTime() - 7 * 86400000;
+  const recentExpenses = state.expenses.filter((e) => e.timestamp >= sevenDaysAgo);
+  const recentSpent = recentExpenses.reduce((s, e) => s + e.amount, 0);
+  const daysWithData = Math.max(1, Math.min(7, currentDay));
+  
+  // Si peu ou pas de dépenses récentes, utiliser l'allocation journalière de base
+  const allowance = computeDailyAllowance(state);
+  const dailyBurn =
+    recentSpent > 0 ? Math.round(recentSpent / daysWithData) : allowance.dailyAllowance;
+
+  // Projection du solde restant le dernier jour du mois
+  const projectedBurn = dailyBurn * (daysRemaining - 1);
+  const projectedBalance = Math.round(currentBalance - projectedBurn);
+
+  let status: "green" | "orange" | "red" = "green";
+  let statusColor = "#4A6B3F"; // Baobab vert
+  let shortPhrase = "";
+  let detailsPhrase = "";
+
+  if (projectedBalance >= 5000) {
+    status = "green";
+    statusColor = "#4A6B3F";
+    shortPhrase = `À ce rythme, tu auras environ ${formatFCFA(projectedBalance)} le ${lastDayOfMonth}.`;
+    detailsPhrase = "Tu tiens le cap sans pression.";
+  } else if (projectedBalance >= 0) {
+    status = "orange";
+    statusColor = "#C9922E";
+    shortPhrase = `À ce rythme, tu auras environ ${formatFCFA(projectedBalance)} le ${lastDayOfMonth}.`;
+    detailsPhrase = "Marge étroite. Priorise l'essentiel.";
+  } else {
+    status = "red";
+    statusColor = "#A8453F";
+    const deficit = Math.abs(projectedBalance);
+    shortPhrase = `Risque de déficit d'environ ${formatFCFA(deficit)} le ${lastDayOfMonth}.`;
+    detailsPhrase = "Serre les dépenses dès aujourd'hui pour garder le contrôle.";
+  }
+
+  return {
+    projectedBalance,
+    lastDayOfMonth,
+    daysRemaining,
+    status,
+    statusColor,
+    shortPhrase,
+    detailsPhrase,
+  };
+}
+
+/**
+ * 1.2 Streak « Jours Maîtrisés » : série de jours sans dépassement budgétaire
+ */
+export interface MasteredStreakResult {
+  streakDays: number;
+  isMilestone: boolean; // >= 7 jours
+  flameLevel: 1 | 2 | 3; // 1: 1-2j, 2: 3-6j, 3: >=7j
+  message: string;
+}
+
+export function computeMasteredDaysStreak(state: AppState): MasteredStreakResult {
+  const allowance = computeDailyAllowance(state);
+  const now = new Date();
+  
+  // Calcul basé sur les dépenses des jours précédents
+  let streak = 0;
+  
+  // Vérifier aujourd'hui : si pas de dépassement, déjà compté comme en cours
+  if (allowance.overspentAmount === 0) {
+    streak = 1;
+  }
+
+  // Analyser jusqu'à 30 jours en arrière
+  for (let i = 1; i <= 30; i++) {
+    const checkDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const dayStart = checkDate.getTime();
+    const dayEnd = dayStart + 86400000;
+
+    const dayExpenses = state.expenses.filter(
+      (e) => e.timestamp >= dayStart && e.timestamp < dayEnd
+    );
+
+    // Si aucune dépense ce jour-là, on considère que le budget n'a pas été dépassé
+    if (dayExpenses.length === 0) {
+      streak++;
+      continue;
+    }
+
+    const dayTotal = dayExpenses.reduce((s, e) => s + e.amount, 0);
+    const threshold = allowance.dailyAllowance > 0 ? allowance.dailyAllowance * 1.15 : 3000;
+
+    if (dayTotal <= threshold) {
+      streak++;
+    } else {
+      break; // Le streak s'arrête au premier jour dépassé
+    }
+  }
+
+  const isMilestone = streak >= 7;
+  const flameLevel: 1 | 2 | 3 = streak >= 7 ? 3 : streak >= 3 ? 2 : 1;
+  
+  let message = "";
+  if (streak >= 7) {
+    message = "Tu tiens le rythme. C’est ça la rigueur.";
+  } else if (streak >= 3) {
+    message = "Belle régularité. Continue sur cette lancée.";
+  } else if (streak === 1 || streak === 2) {
+    message = "Journée sous contrôle. La discipline commence ici.";
+  } else {
+    message = "Nouveau départ aujourd'hui. Chaque franc compte.";
+  }
+
+  return {
+    streakDays: streak,
+    isMilestone,
+    flameLevel,
+    message,
+  };
+}
+
+/**
+ * 1.3 Message du Grand Frère quotidien (humain, contextuel, TTS-ready)
+ */
+export function generateGrandBrotherDailyMessage(state: AppState): string {
+  const name = state.profile.name || "";
+  const allowance = computeDailyAllowance(state);
+  const radar = computeEndOfMonthRadar(state);
+  const streak = computeMasteredDaysStreak(state);
+  const now = new Date();
+  const hour = now.getHours();
+
+  let salute = "Bonjour";
+  if (hour < 6) salute = "Bonne nuit";
+  else if (hour >= 12 && hour < 18) salute = "Bon après-midi";
+  else if (hour >= 18) salute = "Bonsoir";
+
+  const greeting = name ? `${salute} ${name}.` : `${salute}.`;
+
+  // 1. Priorité : objectif proche du but (>= 80%)
+  const nearGoal = state.goals.find((g) => {
+    if (g.completed || g.archived || g.targetAmount <= 0) return false;
+    const ratio = g.currentAmount / g.targetAmount;
+    return ratio >= 0.8 && ratio < 1;
+  });
+
+  if (nearGoal) {
+    const pct = Math.round((nearGoal.currentAmount / nearGoal.targetAmount) * 100);
+    return `${greeting} Tu es à ${pct} % de ton objectif ${nearGoal.name}. Encore un dernier effort, la victoire est à portée de main !`;
+  }
+
+  // 2. Priorité : streak remarquable (>= 7 jours)
+  if (streak.streakDays >= 7) {
+    return `${greeting} ${streak.streakDays} jours consécutifs sans dépassement ! Tu tiens le rythme, c’est ça la vraie rigueur.`;
+  }
+
+  // 3. Priorité : alerte rouge de fin de mois
+  if (radar.status === "red") {
+    return `${greeting} Attention, à ce rythme la fin de mois risque d'être tendue. Priorise la nourriture et le transport, reporte le reste.`;
+  }
+
+  // 4. Priorité : streak naissant ou bonne gestion
+  if (streak.streakDays >= 3) {
+    return `${greeting} T'as bien géré ces derniers jours. Garde ce rythme régulier, chaque franc préservé te protège.`;
+  }
+
+  // 5. Rythme sain standard
+  if (allowance.dailyAllowance > 0) {
+    return `${greeting} Il te reste ${formatFCFA(allowance.dailyAllowance)} par jour jusqu'à la fin du mois. ${allowance.humanMessage}`;
+  }
+
+  return `${greeting} Sois vigilant aujourd'hui, observe bien chaque dépense avant de sortir la monnaie.`;
+}
+
+/**
+ * 2.2 Simulation rapide « Et si… »
+ */
+export function simulateDeposit(
+  state: AppState,
+  amount: number,
+  targetGoalId?: string
+): {
+  currentBalance: number;
+  newBalance: number;
+  targetGoal?: Goal;
+  currentRatio: number;
+  newRatio: number;
+  currentPercentage: number;
+  newPercentage: number;
+  canExecute: boolean;
+} {
+  const currentBalance = state.profile.pocketBalance ?? 0;
+  const newBalance = Math.max(0, currentBalance - amount);
+  const targetGoal = state.goals.find((g) => g.id === targetGoalId) || state.goals[0];
+
+  let currentRatio = 0;
+  let newRatio = 0;
+
+  if (targetGoal && targetGoal.targetAmount > 0) {
+    currentRatio = Math.min(1, targetGoal.currentAmount / targetGoal.targetAmount);
+    newRatio = Math.min(1, (targetGoal.currentAmount + amount) / targetGoal.targetAmount);
+  }
+
+  return {
+    currentBalance,
+    newBalance,
+    targetGoal,
+    currentRatio,
+    newRatio,
+    currentPercentage: Math.round(currentRatio * 100),
+    newPercentage: Math.round(newRatio * 100),
+    canExecute: currentBalance >= amount && amount > 0,
+  };
+}
+

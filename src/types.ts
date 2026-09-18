@@ -91,12 +91,22 @@ export interface QuickTile {
   categoryId: string;
 }
 
+export type DailyChallengeStatus =
+  | "pending"
+  | "accepted"
+  | "completed"
+  | "failed"
+  | "skipped";
+
 export interface DailyChallenge {
   id: string;
   dateKey: string; // YYYY-MM-DD
   title: string;
   estimatedSavings: number;
-  status: "pending" | "accepted" | "declined";
+  status: DailyChallengeStatus;
+  completedAt?: number;
+  failedAt?: number;
+  skippedAt?: number;
 }
 
 export interface AppProfile {
@@ -131,6 +141,28 @@ export interface AppProfile {
   pinCodeEnabled: boolean;
   pinCode?: string;
   onboardingCompleted: boolean;
+  signatureBase64?: string; // Signature manuscrite PNG base64
+  signatureDate?: string;   // Date de la dernière signature
+}
+
+export type TransactionType =
+  | "expense"
+  | "income"
+  | "goal_deposit"
+  | "balance_adjustment"
+  | "round_up";
+
+export interface Transaction {
+  id: string;
+  type: TransactionType;
+  amount: number; // Toujours positif
+  direction: "in" | "out";
+  label?: string;
+  categoryId?: string;
+  goalId?: string;
+  timestamp: number;
+  relatedExpenseId?: string;
+  note?: string;
 }
 
 export interface AppState {
@@ -143,4 +175,5 @@ export interface AppState {
   tontines: TontineItem[];
   quickTiles: QuickTile[];
   dailyChallenges: DailyChallenge[];
+  transactions: Transaction[];
 }

@@ -27,7 +27,7 @@ jobs:
           cache: 'npm'
 
       - name: Installation des dépendances
-        run: npm ci
+        run: npm ci || npm install
 
       - name: Vérification des types TypeScript (Lint)
         run: npm run lint

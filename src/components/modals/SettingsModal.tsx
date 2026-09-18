@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { AppProfile, AppState, QuickTile, RoundingUnit } from "../../types";
 import { CaurisIcon } from "../icons/CustomIcons";
 import { exportStateAsJson, importStateFromJson } from "../../utils/storage";
-import { formatFCFA } from "../../utils/engine";
-import { X, Moon, Sun, Eye, EyeOff, Shield, Download, Upload, Trash2, Plus } from "lucide-react";
+import { formatFCFA, computeObservationBudgetSuggestion } from "../../utils/engine";
+import { SignaturePad } from "../common/SignaturePad";
+import { X, Moon, Sun, Eye, EyeOff, Shield, Download, Upload, Trash2, Plus, Sparkles } from "lucide-react";
 
 interface SettingsModalProps {
   state: AppState;
@@ -32,6 +33,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [quickTileLabel, setQuickTileLabel] = useState("");
   const [quickTileAmount, setQuickTileAmount] = useState("");
   const [confirmReset, setConfirmReset] = useState(false);
+
+  const observationSuggestion = computeObservationBudgetSuggestion(state);
+
+  const handleApplyObservationBudget = () => {
+    setDailyBudgetTarget(observationSuggestion.suggestedBudget.toString());
+    onUpdateProfile({
+      dailyBudgetTarget: observationSuggestion.suggestedBudget,
+      observationMode: false,
+    });
+  };
 
   const handleSaveProfile = () => {
     onUpdateProfile({
@@ -161,6 +172,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
               </div>
             </div>
+
+            {/* Mode observation & suggestion de budget */}
+            {state.profile.observationMode && (
+              <div className="p-3 bg-[#C9922E]/10 border border-[#C9922E]/30 rounded-[12px] space-y-2 text-xs">
+                <div className="flex items-center gap-2 text-[#C9922E] font-medium">
+                  <Sparkles className="w-4 h-4 shrink-0" />
+                  <span>Mode observation actif (jour {observationSuggestion.daysObserved}/7)</span>
+                </div>
+                <p className="text-[11px] text-[#55534F]">
+                  NAFA observe tes dépenses réelles pour suggérer un budget adapté sans contrainte préalable.
+                </p>
+                {observationSuggestion.isEligible ? (
+                  <div className="pt-2 border-t border-[#C9922E]/20 space-y-1.5">
+                    <p className="text-[11px] text-[#1F1A15]">
+                      Dépense moyenne constatée : <span className="font-semibold">{formatFCFA(observationSuggestion.averageDailySpent)}</span> / jour.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleApplyObservationBudget}
+                      className="w-full py-2 bg-[#C9922E] text-white rounded-[8px] font-semibold text-xs hover:bg-[#B58226] transition-all"
+                    >
+                      Adopter ce budget ({formatFCFA(observationSuggestion.suggestedBudget)} / jour)
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-[#8A8884]">
+                    Continue d'enregistrer tes dépenses. Une proposition apparaîtra au 7ème jour.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Devise et Arrondis */}
@@ -312,6 +354,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Signature manuscrite pour l'Attestation A4 */}
+          <div className="pt-3 border-t border-[#E8DDC9]">
+            <SignaturePad
+              currentSignature={state.profile.signatureBase64}
+              onSave={(base64Png) => {
+                onUpdateProfile({
+                  signatureBase64: base64Png,
+                  signatureDate: new Date().toISOString().slice(0, 10),
+                });
+              }}
+              onRemove={() => {
+                onUpdateProfile({
+                  signatureBase64: undefined,
+                  signatureDate: undefined,
+                });
+              }}
+            />
           </div>
 
           {/* Export & Sauvegarde */}

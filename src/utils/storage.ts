@@ -1,4 +1,4 @@
-import { AppProfile, AppState, Category } from "../types";
+import { AppProfile, AppState, Category, Transaction } from "../types";
 
 export const DEFAULT_CATEGORIES: Category[] = [
   {
@@ -69,6 +69,8 @@ export const INITIAL_APP_STATE: AppState = {
     privateMode: false,
     pinCodeEnabled: false,
     onboardingCompleted: false,
+    signatureBase64: undefined,
+    signatureDate: undefined,
   },
   categories: DEFAULT_CATEGORIES,
   // STRICT RULE: No demo dummy transactions!
@@ -79,13 +81,26 @@ export const INITIAL_APP_STATE: AppState = {
   tontines: [],
   quickTiles: [],
   dailyChallenges: [],
+  transactions: [],
 };
 
-const STORAGE_KEY = "nafa_state_v4";
+const STORAGE_KEY = "nafa_state_v5";
+const LEGACY_STORAGE_KEYS = ["nafa_state_v4", "nafa_state_v3", "nafa_state_v2"];
 
 export function loadAppState(): AppState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      // Tentative de migration depuis une version antérieure
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        const legacyRaw = localStorage.getItem(legacyKey);
+        if (legacyRaw) {
+          raw = legacyRaw;
+          break;
+        }
+      }
+    }
+
     if (!raw) return INITIAL_APP_STATE;
     const parsed = JSON.parse(raw);
 
@@ -102,11 +117,68 @@ export function loadAppState(): AppState {
       lastOpenedTimestamp: Date.now(),
     };
 
-    return {
+    const loadedExpenses = Array.isArray(parsed.expenses) ? parsed.expenses : [];
+    const loadedIncomes = Array.isArray(parsed.incomes) ? parsed.incomes : [];
+    let loadedTransactions: Transaction[] = Array.isArray(parsed.transactions) ? parsed.transactions : [];
+
+    // Si aucune transaction mais dépenses/revenus existants, reconstitution rétrocompatible
+    if (loadedTransactions.length === 0 && (loadedExpenses.length > 0 || loadedIncomes.length > 0)) {
+      const generated: Transaction[] = [];
+
+      loadedIncomes.forEach((inc: any) => {
+        generated.push({
+          id: `tx_inc_${inc.id}`,
+          type: "income",
+          amount: inc.amount,
+          direction: "in",
+          label: inc.label || inc.category || "Revenu",
+          timestamp: inc.timestamp,
+        });
+      });
+
+      loadedExpenses.forEach((exp: any) => {
+        generated.push({
+          id: `tx_exp_${exp.id}`,
+          type: "expense",
+          amount: exp.amount,
+          direction: "out",
+          categoryId: exp.categoryId,
+          label: exp.label,
+          timestamp: exp.timestamp,
+        });
+
+        if (exp.roundUpSaved && exp.roundUpSaved > 0) {
+          generated.push({
+            id: `tx_rup_${exp.id}`,
+            type: "round_up",
+            amount: exp.roundUpSaved,
+            direction: "out",
+            goalId: exp.targetGoalId,
+            label: "Arrondi d'épargne",
+            timestamp: exp.timestamp,
+            relatedExpenseId: exp.id,
+          });
+        }
+      });
+
+      loadedTransactions = generated.sort((a, b) => b.timestamp - a.timestamp);
+    }
+
+    const state: AppState = {
       ...INITIAL_APP_STATE,
       ...parsed,
       profile: cleanedProfile,
+      transactions: loadedTransactions,
     };
+
+    // Sauvegarde immédiate sous la clé v5
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Ignorer
+    }
+
+    return state;
   } catch (err) {
     console.error("Erreur de lecture du stockage local:", err);
     return INITIAL_APP_STATE;
@@ -133,6 +205,7 @@ export function importStateFromJson(jsonString: string): AppState {
   return {
     ...INITIAL_APP_STATE,
     ...parsed,
+    transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
   };
 }
 
@@ -141,8 +214,14 @@ export const DEFAULT_APP_STATE: AppState = INITIAL_APP_STATE;
 export function resetAppState(): AppState {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      localStorage.removeItem(legacyKey);
+    }
   } catch (err) {
     console.error("Erreur lors de la réinitialisation:", err);
   }
-  return { ...INITIAL_APP_STATE, profile: { ...INITIAL_APP_STATE.profile, lastOpenedTimestamp: Date.now() } };
+  return {
+    ...INITIAL_APP_STATE,
+    profile: { ...INITIAL_APP_STATE.profile, lastOpenedTimestamp: Date.now() },
+  };
 }

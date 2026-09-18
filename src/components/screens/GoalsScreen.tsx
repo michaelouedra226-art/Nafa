@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { AppState, Goal, GoalMode, GoalVisual } from "../../types";
 import { CaurisIcon, CalebasseIcon, BaobabIcon, BogolanFrise } from "../icons/CustomIcons";
-import { formatFCFA } from "../../utils/engine";
-import { Plus, MoreVertical, X, Check, Share2, Award, Calendar } from "lucide-react";
+import { ProgressionVisualTree } from "../goals/ProgressionVisualTree";
+import { soundEffects, triggerHapticFeedback } from "../../utils/hapticsAndAudio";
+import { formatFCFA, simulateDeposit } from "../../utils/engine";
+import { Plus, MoreVertical, X, Check, Share2, Award, Calendar, Sparkles, Calculator, ArrowRight } from "lucide-react";
 
 interface GoalsScreenProps {
   state: AppState;
@@ -25,6 +27,7 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
   const [showNewGoalModal, setShowNewGoalModal] = useState(false);
   const [selectedGoalForAdd, setSelectedGoalForAdd] = useState<Goal | null>(null);
   const [amountToAddStr, setAmountToAddStr] = useState("");
+  const [quickSimAmount, setQuickSimAmount] = useState<number>(2000);
 
   // Gestion de la touche retour pour fermer les dialogues internes
   useEffect(() => {
@@ -64,9 +67,12 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
     const addedAmount = Number(amountToAddStr);
     onAddAmountToGoal(selectedGoalForAdd.id, addedAmount);
 
+    soundEffects.playCaurisClink();
+    triggerHapticFeedback([30, 40, 30]);
+
     confetti({
-      particleCount: 50,
-      spread: 60,
+      particleCount: 55,
+      spread: 65,
       origin: { y: 0.6 },
       colors: ["#C9922E", "#B5541F", "#4A6B3F"],
     });
@@ -192,6 +198,63 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
         </button>
       </div>
 
+      {/* Simulation rapide "Et si..." (P0 WAOUH) */}
+      {activeGoals.length > 0 && (() => {
+        const simTargetGoal = activeGoals[0];
+        const simResult = simulateDeposit(state, quickSimAmount, simTargetGoal.id);
+        return (
+          <div className="mx-5 mt-2 mb-1 p-3.5 bg-white border border-[#E8DDC9] rounded-[16px] shadow-xs">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#1F1A15]">
+                <Calculator className="w-3.5 h-3.5 text-[#B5541F]" />
+                <span>Simulation « Et si... »</span>
+              </div>
+              <span className="text-[10px] text-[#8A8884]">Projection directe</span>
+            </div>
+
+            <p className="text-xs text-[#55534F] leading-relaxed">
+              Si tu mets <strong className="text-[#B5541F] font-semibold">{formatFCFA(quickSimAmount)}</strong> de côté sur{" "}
+              <span className="font-semibold text-[#1F1A15]">{simResult.targetGoal?.name || "ton projet"}</span>, ton solde disponible sera de{" "}
+              <strong className="text-[#1F1A15] font-semibold">{formatFCFA(simResult.newBalance)}</strong> et ta progression passera à{" "}
+              <strong className="text-[#4A6B3F] font-semibold">{simResult.newPercentage}%</strong>.
+            </p>
+
+            <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[#E8DDC9]/50">
+              <div className="flex items-center gap-1.5">
+                {[1000, 2000, 5000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setQuickSimAmount(amt)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
+                      quickSimAmount === amt
+                        ? "bg-[#B5541F] text-white"
+                        : "bg-[#FAF6EF] text-[#55534F] hover:bg-[#E8DDC9]/60"
+                    }`}
+                  >
+                    +{amt} F
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (simResult.targetGoal) {
+                    setSelectedGoalForAdd(simResult.targetGoal);
+                    setAmountToAddStr(quickSimAmount.toString());
+                  }
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#FAF6EF] hover:bg-[#B5541F] text-[#B5541F] hover:text-white rounded-full text-xs font-semibold border border-[#B5541F]/40 transition-colors"
+              >
+                <span>Verser</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 5.2 Cartes d'objectif */}
       <div className="p-5 space-y-4">
         {activeGoals.length === 0 ? (
@@ -213,70 +276,38 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
             const ratio = Math.min(1, goal.currentAmount / goal.targetAmount);
             const percentage = Math.round(ratio * 100);
 
-            // Visuel calculé
-            const renderVisual = () => {
-              if (goal.visual === "cauris") {
-                return (
-                  <div className="w-10 h-10 rounded-full bg-[#FAF6EF] border border-[#E8DDC9] flex items-center justify-center">
-                    <CaurisIcon
-                      size={22}
-                      color={percentage >= 100 ? "#C9922E" : "#B5541F"}
-                      filled={percentage >= 50}
-                    />
-                  </div>
-                );
-              }
-              if (goal.visual === "calebasse") {
-                return (
-                  <div className="w-10 h-10 rounded-full bg-[#FAF6EF] border border-[#E8DDC9] flex items-center justify-center">
-                    <CalebasseIcon
-                      size={22}
-                      color="#B5541F"
-                      active={percentage > 0}
-                    />
-                  </div>
-                );
-              }
-              // Baobab
-              const stage = percentage < 25 ? 1 : percentage < 50 ? 2 : percentage < 80 ? 3 : 4;
-              return (
-                <div className="w-10 h-10 rounded-full bg-[#FAF6EF] border border-[#E8DDC9] flex items-center justify-center">
-                  <BaobabIcon size={22} color="#4A6B3F" stage={stage as any} />
-                </div>
-              );
-            };
-
             return (
               <div
                 key={goal.id}
-                className="bg-white rounded-[14px] border border-[#E8DDC9] p-5 shadow-xs transition-all hover:border-[#B5541F]/40"
+                className="bg-white rounded-[16px] border border-[#E8DDC9] p-5 shadow-xs transition-all hover:border-[#B5541F]/40"
               >
-                {/* Zone haute */}
+                {/* Visual vivant (Baobab / Calebasse / Cauris) & Titre */}
+                <div className="mb-4">
+                  <ProgressionVisualTree goal={goal} percentage={percentage} />
+                </div>
+
                 <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    {renderVisual()}
-                    <div>
-                      <h2 className="font-fraunces text-lg font-bold text-[#1F1A15] leading-tight">
-                        {goal.name}
-                      </h2>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {goal.targetDate && (
-                          <span className="text-[10px] text-[#8A8884] flex items-center gap-0.5">
-                            <Calendar className="w-3 h-3" />
-                            pour {goal.targetDate}
-                          </span>
-                        )}
-                        {goal.mode === "temoin" && goal.witnessName && (
-                          <span className="text-[10px] text-[#1E2A44] font-medium px-1.5 py-0.5 rounded bg-[#1E2A44]/10">
-                            Témoin : {goal.witnessName}
-                          </span>
-                        )}
-                        {goal.isEmergencyFund && (
-                          <span className="text-[10px] text-[#4A6B3F] font-medium px-1.5 py-0.5 rounded bg-[#4A6B3F]/10">
-                            Fonds d'urgence
-                          </span>
-                        )}
-                      </div>
+                  <div>
+                    <h2 className="font-fraunces text-lg font-bold text-[#1F1A15] leading-tight">
+                      {goal.name}
+                    </h2>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {goal.targetDate && (
+                        <span className="text-[10px] text-[#8A8884] flex items-center gap-0.5">
+                          <Calendar className="w-3 h-3" />
+                          pour {goal.targetDate}
+                        </span>
+                      )}
+                      {goal.mode === "temoin" && goal.witnessName && (
+                        <span className="text-[10px] text-[#1E2A44] font-medium px-1.5 py-0.5 rounded bg-[#1E2A44]/10">
+                          Témoin : {goal.witnessName}
+                        </span>
+                      )}
+                      {goal.isEmergencyFund && (
+                        <span className="text-[10px] text-[#4A6B3F] font-medium px-1.5 py-0.5 rounded bg-[#4A6B3F]/10">
+                          Fonds d'urgence
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -371,9 +402,14 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
             <h3 className="font-fraunces text-base font-semibold text-[#1F1A15] mb-1">
               Verser pour {selectedGoalForAdd.name}
             </h3>
-            <p className="text-xs text-[#8A8884] mb-4">
-              Chaque franc versé alimente ce projet.
-            </p>
+            <div className="flex items-center justify-between text-xs mb-3">
+              <span className="text-[#8A8884]">Solde disponible :</span>
+              <strong className="text-[#1F1A15] font-semibold">
+                {state.profile.pocketBalance !== undefined
+                  ? `${state.profile.pocketBalance.toLocaleString("fr-FR")} F`
+                  : "Non défini"}
+              </strong>
+            </div>
 
             <input
               type="number"
@@ -381,22 +417,35 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
               value={amountToAddStr}
               onChange={(e) => setAmountToAddStr(e.target.value)}
               placeholder="Montant en FCFA"
-              className="w-full p-2.5 bg-white rounded-lg border border-[#E8DDC9] text-base font-bold font-fraunces focus:outline-none focus:border-[#B5541F] mb-4"
+              className={`w-full p-2.5 bg-white rounded-lg border text-base font-bold font-fraunces focus:outline-none mb-2 ${
+                state.profile.pocketBalance !== undefined && Number(amountToAddStr) > state.profile.pocketBalance
+                  ? "border-red-500 text-red-600 focus:border-red-500"
+                  : "border-[#E8DDC9] focus:border-[#B5541F]"
+              }`}
             />
 
-            <div className="flex gap-2">
+            {state.profile.pocketBalance !== undefined && Number(amountToAddStr) > state.profile.pocketBalance && (
+              <p className="text-[11px] text-red-600 font-medium mb-3">
+                Solde insuffisant (il te reste {state.profile.pocketBalance.toLocaleString("fr-FR")} F).
+              </p>
+            )}
+
+            <div className="flex gap-2 mt-2">
               <button
                 type="button"
                 onClick={handleDeposit}
-                disabled={Number(amountToAddStr) <= 0}
-                className="flex-1 py-2 bg-[#B5541F] disabled:opacity-40 text-white rounded-full text-xs font-semibold"
+                disabled={
+                  Number(amountToAddStr) <= 0 ||
+                  (state.profile.pocketBalance !== undefined && Number(amountToAddStr) > state.profile.pocketBalance)
+                }
+                className="flex-1 py-2 bg-[#B5541F] disabled:opacity-40 text-white rounded-full text-xs font-semibold active:scale-98 transition-all"
               >
                 Verser
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedGoalForAdd(null)}
-                className="px-3 py-2 bg-white text-[#55534F] rounded-full text-xs"
+                className="px-3 py-2 bg-white text-[#55534F] rounded-full text-xs hover:bg-[#FAF6EF]"
               >
                 Annuler
               </button>

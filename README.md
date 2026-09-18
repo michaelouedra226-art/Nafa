@@ -44,22 +44,28 @@ Application web moderne de gestion budgétaire et d'épargne conçue pour les é
 
 ## Intégration Continue & Compilation APK (GitHub Actions)
 
-Le dépôt intègre trois workflows automatisés sous `.github/workflows/` :
+Le dépôt intègre un workflow CI/CD complet sous `.github/workflows/` :
 
-1. **`build-apk.yml` (Compilation APK Android)** :
-   - Déclenché automatiquement lors de chaque `push` sur `main` / `master`, lors de la création d'un tag de version (`v*`), ou manuellement via l'onglet **Actions > Build Android APK > Run workflow**.
-   - Configure automatiquement l'environnement Java JDK 21, Node.js 20, le SDK Android et Gradle.
-   - Compile l'application React/Vite en bundle web de production et synchronise Capacitor Android.
-   - Génère l'**APK Debug** et l'**APK Release** prêts à être installés directement sur smartphone Android.
-   - Met à disposition les fichiers APK téléchargeables sous forme d'artefacts GitHub Actions (`nafa-app-debug-apk` et `nafa-app-release-apk`).
+### 1. `build-apk.yml` (Compilation & Publication APK Android)
+- **Déclenchement automatique** : À chaque `push` sur les branches `main` ou `master`, à la création d'un tag (`v*`), ou manuellement via **GitHub > Actions > Build Android APK > Run workflow**.
+- **Environnement configuré** : Java JDK 21 (Temurin), Android SDK Tools (API 36 & 35), licences Android automatiquement acceptées, Gradle 8.14.3.
+- **Artefacts générés** :
+  - `NAFA-debug.apk` (recommandé pour test et installation directe immédiate sur tout smartphone Android).
+  - `NAFA-release.apk` (compilé avec signature debug pour permettre l'installation sans bloquage de certificat).
 
-2. **`ci.yml` (Build & Verification)** :
-   - Exécuté automatiquement à chaque `push` et `pull_request` sur les branches `main` et `master`.
-   - Lance `npm ci`, puis le linting de typechecking (`npm run lint`), puis la compilation de production (`npm run build`).
-   - Archive automatiquement le bundle compilé `dist/` en artefact téléchargeable.
+### 2. Liens directs de téléchargement des APKs
 
-3. **`deploy-pages.yml` (Déploiement GitHub Pages)** :
-   - Permet de publier en un clic ou lors d'un push l'interface client SPA statique sur GitHub Pages.
+Dès que le workflow s'exécute sur votre dépôt GitHub, les APKs sont immédiatement accessibles via deux canaux :
+
+1. **Lien direct public GitHub Releases (sans connexion requise) :**
+   - **APK Debug (Direct)** : `https://github.com/<UTILISATEUR>/<DEPOT>/releases/latest/download/NAFA-debug.apk`
+   - **APK Release (Direct)** : `https://github.com/<UTILISATEUR>/<DEPOT>/releases/latest/download/NAFA-release.apk`
+   *(Remplacez `<UTILISATEUR>/<DEPOT>` par le nom de votre compte GitHub et de votre dépôt)*
+
+2. **Depuis l'onglet Actions :**
+   - Rendez-vous sur votre dépôt GitHub : `https://github.com/<UTILISATEUR>/<DEPOT>/actions`
+   - Cliquez sur la dernière exécution **Build Android APK**
+   - Descendez à la section **Artifacts** et cliquez sur **nafa-android-apks** pour télécharger l'archive zip contenant les APKs.
 
 ## Structure du projet
 

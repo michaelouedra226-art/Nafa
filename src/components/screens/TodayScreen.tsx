@@ -1,10 +1,35 @@
-import React from "react";
-import { motion } from "motion/react";
-import { AppState, Expense, QuickTile } from "../../types";
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { AppState, Expense, QuickTile, DailyChallenge } from "../../types";
 import { CaurisIcon, BalaiIcon } from "../icons/CustomIcons";
-import { computeDailyAllowance, detectContextualAlerts, formatFCFA, isSameDay } from "../../utils/engine";
+import {
+  computeDailyAllowance,
+  detectContextualAlerts,
+  formatFCFA,
+  isSameDay,
+  getOrGenerateTodayChallenge,
+  computeEndOfMonthRadar,
+  computeMasteredDaysStreak,
+  generateGrandBrotherDailyMessage,
+} from "../../utils/engine";
 import { TTSVoicePlayer } from "../audio/TTSVoicePlayer";
-import { MoreVertical, Plus, ArrowRight, Zap, Sparkles, AlertCircle } from "lucide-react";
+import {
+  MoreVertical,
+  Plus,
+  ArrowRight,
+  Zap,
+  Sparkles,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
+  SkipForward,
+  RotateCcw,
+  Flame,
+  Compass,
+  Focus,
+  Eye,
+  MessageCircle,
+} from "lucide-react";
 
 interface TodayScreenProps {
   state: AppState;
@@ -16,8 +41,12 @@ interface TodayScreenProps {
   onDuplicateExpense: (expense: Expense) => void;
   onQuickTileTap: (tile: QuickTile) => void;
   onSetPocketBalance: () => void;
-  onAcceptChallenge: (challengeId: string) => void;
-  onDeclineChallenge: (challengeId: string) => void;
+  onAcceptChallenge: (challenge: DailyChallenge | string) => void;
+  onValidateChallenge: (challenge: DailyChallenge | string) => void;
+  onFailChallenge: (challenge: DailyChallenge | string) => void;
+  onSkipChallenge: (challenge: DailyChallenge | string) => void;
+  onResetChallenge: (challengeId: string) => void;
+  onDeclineChallenge?: (challengeId: string) => void;
 }
 
 export const TodayScreen: React.FC<TodayScreenProps> = ({
@@ -31,7 +60,10 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   onQuickTileTap,
   onSetPocketBalance,
   onAcceptChallenge,
-  onDeclineChallenge,
+  onValidateChallenge,
+  onFailChallenge,
+  onSkipChallenge,
+  onResetChallenge,
 }) => {
   const now = new Date();
   const hour = now.getHours();
@@ -48,8 +80,13 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
     month: "long",
   });
 
+  const [isFocusMode, setIsFocusMode] = useState(false);
+
   const allowance = computeDailyAllowance(state);
   const alerts = detectContextualAlerts(state);
+  const radar = computeEndOfMonthRadar(state);
+  const streak = computeMasteredDaysStreak(state);
+  const grandBrotherMsg = generateGrandBrotherDailyMessage(state);
 
   // Dépenses du jour par catégorie pour les 3 pastilles
   const todayExpenses = state.expenses.filter((e) => isSameDay(e.timestamp, now.getTime()));
@@ -67,44 +104,167 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   const sortedExpenses = [...state.expenses].sort((a, b) => b.timestamp - a.timestamp);
   const lastFiveExpenses = sortedExpenses.slice(0, 5);
 
-  // Défi du jour (Partie 16.4)
-  const todayKey = now.toISOString().slice(0, 10);
-  const currentChallenge = state.dailyChallenges.find((c) => c.dateKey === todayKey) || {
-    id: `challenge_${todayKey}`,
-    dateKey: todayKey,
-    title: "Aujourd'hui : cuisine au lieu d'acheter dehors.",
-    estimatedSavings: 1000,
-    status: "pending" as const,
-  };
+  // Défi / Objectif du jour (Partie 16.4 & Gestion des états)
+  const currentChallenge = getOrGenerateTodayChallenge(state, now);
 
   // Discours vocal grand frère (TTS)
-  const ttsMessage = `${greeting} ${state.profile.name || ""}. Aujourd'hui, il te reste ${allowance.dailyAllowance} francs par jour jusqu'à la fin du mois. ${allowance.humanMessage}`;
+  const ttsMessage = `${greeting} ${state.profile.name || ""}. ${grandBrotherMsg} Il te reste ${allowance.dailyAllowance.toLocaleString("fr-FR")} francs par jour jusqu'à la fin du mois. ${allowance.humanMessage}`;
 
   return (
     <div className="flex flex-col min-h-full pb-24 text-[#1F1A15]">
       {/* 4.2 Zone haute */}
-      <div className="flex items-center justify-between pt-4 pb-3 px-5 border-b border-[#E8DDC9]/40 bg-[#FAF6EF]">
-        <div>
-          <h1 className="font-fraunces text-lg font-semibold text-[#1F1A15]">
-            {greeting}, {state.profile.name || "Michael"}
-          </h1>
-          <p className="text-xs text-[#8A8884] capitalize">{dateFormatted}</p>
+      <div className="pt-4 pb-3 px-5 border-b border-[#E8DDC9]/40 bg-[#FAF6EF]">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h1 className="font-fraunces text-lg font-semibold text-[#1F1A15]">
+              {greeting}, {state.profile.name || "Michael"}
+            </h1>
+            <p className="text-xs text-[#8A8884] capitalize">{dateFormatted}</p>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {/* Bouton Mode Focus Dépenses */}
+            <button
+              type="button"
+              onClick={() => setIsFocusMode(!isFocusMode)}
+              className={`p-2 rounded-full transition-colors ${
+                isFocusMode
+                  ? "bg-[#B5541F] text-white"
+                  : "text-[#55534F] hover:bg-[#E8DDC9]/50"
+              }`}
+              title={isFocusMode ? "Quitter le mode focus" : "Mode focus dépenses"}
+            >
+              <Focus className="w-4 h-4" />
+            </button>
+
+            {/* Lecteur TTS voix du grand frère */}
+            <TTSVoicePlayer textToSpeak={ttsMessage} label="Audio" />
+
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="p-2 rounded-full text-[#55534F] hover:bg-[#E8DDC9]/50 transition-colors"
+              title="Réglages"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Lecteur TTS voix du grand frère */}
-          <TTSVoicePlayer textToSpeak={ttsMessage} label="Audio" />
-
+        {/* Ligne double : Solde disponible & Streak « Jours Maîtrisés » (P0 WAOUH) */}
+        <div className="flex items-center justify-between gap-2 mt-2">
           <button
             type="button"
-            onClick={onOpenSettings}
-            className="p-2 rounded-full text-[#55534F] hover:bg-[#E8DDC9]/50 transition-colors"
-            title="Réglages"
+            onClick={onSetPocketBalance}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#E8DDC9] hover:border-[#B5541F]/60 shadow-2xs text-xs transition-all active:scale-98"
+            title="Modifier le solde disponible"
           >
-            <MoreVertical className="w-5 h-5" />
+            <span className="w-2 h-2 rounded-full bg-[#4A6B3F] shrink-0" />
+            <span className="text-[#55534F]">Solde :</span>
+            <span className="font-bold text-[#1F1A15] font-fraunces">
+              {state.profile.pocketBalance !== undefined
+                ? `${state.profile.pocketBalance.toLocaleString("fr-FR")} F`
+                : "Définir"}
+            </span>
           </button>
+
+          {/* Streak Jours Maîtrisés */}
+          <div
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium shadow-2xs transition-all ${
+              streak.flameLevel >= 3
+                ? "bg-[#C9922E]/15 border-[#C9922E] text-[#8F6618]"
+                : streak.flameLevel === 2
+                ? "bg-[#B5541F]/10 border-[#B5541F]/40 text-[#B5541F]"
+                : "bg-white border-[#E8DDC9] text-[#55534F]"
+            }`}
+            title={streak.message || `${streak.streakDays} jours consécutifs sans dépassement`}
+          >
+            <Flame
+              className={`w-3.5 h-3.5 ${
+                streak.flameLevel >= 2 ? "text-[#B5541F] fill-[#B5541F]" : "text-[#8A8884]"
+              }`}
+            />
+            <span className="font-bold">{streak.streakDays} j</span>
+            <span className="text-[10px] text-[#8A8884]">maîtrisés</span>
+            {streak.streakDays >= 7 && (
+              <Sparkles className="w-3 h-3 text-[#C9922E] fill-[#C9922E]" />
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Message du Grand Frère (P1 WAOUH) */}
+      {!isFocusMode && (
+        <div className="mx-5 mt-3 px-3.5 py-2.5 bg-[#FAF6EF] border border-[#E8DDC9] rounded-[14px] flex items-start gap-2.5 shadow-2xs">
+          <div className="p-1.5 rounded-full bg-white text-[#B5541F] shrink-0 mt-0.5 border border-[#E8DDC9]">
+            <MessageCircle className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#B5541F]">
+              Le mot du Grand Frère
+            </span>
+            <p className="text-xs text-[#55534F] font-medium leading-relaxed mt-0.5">
+              {grandBrotherMsg}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Radar de fin de mois (P0 WAOUH) */}
+      {!isFocusMode && (
+        <div className="mx-5 mt-2.5 p-3 bg-white border border-[#E8DDC9] rounded-[16px] shadow-xs flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div
+              className={`p-2 rounded-full ${
+                radar.status === "green"
+                  ? "bg-[#4A6B3F]/10 text-[#4A6B3F]"
+                  : radar.status === "orange"
+                  ? "bg-[#C9922E]/10 text-[#C9922E]"
+                  : "bg-[#A8453F]/10 text-[#A8453F]"
+              }`}
+            >
+              <Compass className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#8A8884]">
+                  Radar fin de mois
+                </span>
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                    radar.status === "green"
+                      ? "bg-[#4A6B3F]/15 text-[#4A6B3F]"
+                      : radar.status === "orange"
+                      ? "bg-[#C9922E]/15 text-[#C9922E]"
+                      : "bg-[#A8453F]/15 text-[#A8453F]"
+                  }`}
+                >
+                  {radar.status === "green"
+                    ? "Cap serein"
+                    : radar.status === "orange"
+                    ? "Vigilance"
+                    : "Risque déficit"}
+                </span>
+              </div>
+              <p className="text-xs text-[#1F1A15] font-medium mt-0.5">{radar.shortPhrase}</p>
+            </div>
+          </div>
+          <div className="text-right pl-2 shrink-0">
+            <span className="text-[9px] text-[#8A8884] block">Prévu le {radar.lastDayOfMonth}</span>
+            <span
+              className={`font-fraunces text-sm font-bold ${
+                radar.status === "green"
+                  ? "text-[#4A6B3F]"
+                  : radar.status === "orange"
+                  ? "text-[#C9922E]"
+                  : "text-[#A8453F]"
+              }`}
+            >
+              {formatFCFA(radar.projectedBalance)}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Bandeaux contextuels (Partie 4.8) */}
       {alerts.length > 0 && (
@@ -321,135 +481,288 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         </div>
       )}
 
-      {/* 16.4 Défi du jour (Micro-défi contextuel) */}
-      {currentChallenge && currentChallenge.status === "pending" && (
-        <div className="mx-5 mb-6 p-4 rounded-[14px] bg-[#E8DDC9]/30 border border-[#E8DDC9] flex items-center justify-between">
-          <div className="flex items-start gap-2.5 pr-2">
-            <Sparkles className="w-4 h-4 text-[#C9922E] shrink-0 mt-0.5" />
-            <div>
-              <span className="text-[10px] text-[#8A8884] uppercase font-bold tracking-wider block">
-                Défi du jour
-              </span>
-              <p className="text-xs text-[#1F1A15] font-medium leading-tight">
-                {currentChallenge.title}
-              </p>
-              <span className="text-[10px] text-[#4A6B3F] font-semibold mt-0.5 block">
-                Économie estimée : +{formatFCFA(currentChallenge.estimatedSavings)} vers ton objectif
-              </span>
+      {/* Bandeau Mode Focus Dépenses (P3 WAOUH) */}
+      {isFocusMode && (
+        <div className="mx-5 mb-4 p-3 bg-white border border-[#B5541F]/40 rounded-[14px] flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-2 text-xs text-[#1F1A15]">
+            <Focus className="w-4 h-4 text-[#B5541F]" />
+            <span className="font-semibold">Mode Focus Dépenses actif</span>
+            <span className="text-[#8A8884] text-[11px] hidden sm:inline">— Saisie directe sans distraction</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsFocusMode(false)}
+            className="text-[11px] font-semibold text-[#B5541F] hover:underline"
+          >
+            Quitter le focus
+          </button>
+        </div>
+      )}
+
+      {/* 16.4 Objectif / Défi du jour avec passage, validation, échec et réinitialisation */}
+      {!isFocusMode && currentChallenge && (
+        <div className="mx-5 mb-6 p-4 rounded-[14px] bg-[#FAF6EF] border border-[#E8DDC9] shadow-2xs">
+          <div className="flex items-start justify-between gap-2 mb-2.5">
+            <div className="flex items-start gap-2.5">
+              <div className="w-7 h-7 rounded-full bg-white border border-[#E8DDC9] flex items-center justify-center shrink-0 mt-0.5">
+                {currentChallenge.status === "completed" ? (
+                  <CheckCircle2 className="w-4 h-4 text-[#4A6B3F]" />
+                ) : currentChallenge.status === "failed" ? (
+                  <XCircle className="w-4 h-4 text-[#A8453F]" />
+                ) : currentChallenge.status === "skipped" ? (
+                  <SkipForward className="w-4 h-4 text-[#8A8884]" />
+                ) : (
+                  <Sparkles className="w-4 h-4 text-[#C9922E]" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-[#8A8884] uppercase font-bold tracking-wider">
+                    Objectif du jour
+                  </span>
+                  {/* Badge d'état */}
+                  {currentChallenge.status === "completed" && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#4A6B3F]/10 text-[#4A6B3F]">
+                      Validé
+                    </span>
+                  )}
+                  {currentChallenge.status === "failed" && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#A8453F]/10 text-[#A8453F]">
+                      Échoué
+                    </span>
+                  )}
+                  {currentChallenge.status === "skipped" && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#8A8884]/15 text-[#55534F]">
+                      Passé
+                    </span>
+                  )}
+                  {currentChallenge.status === "accepted" && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#C9922E]/15 text-[#8F6618]">
+                      En cours
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#1F1A15] font-medium leading-tight mt-0.5">
+                  {currentChallenge.title}
+                </p>
+                <span className="text-[11px] text-[#4A6B3F] font-semibold mt-0.5 block">
+                  Économie estimée : +{formatFCFA(currentChallenge.estimatedSavings)} vers ton objectif
+                </span>
+              </div>
             </div>
+
+            {/* Bouton réinitialiser si l'état est résolu */}
+            {currentChallenge.status !== "pending" && (
+              <button
+                type="button"
+                onClick={() => onResetChallenge(currentChallenge.id)}
+                className="p-1.5 text-[#8A8884] hover:text-[#1F1A15] rounded-full hover:bg-[#E8DDC9]/40 transition-colors"
+                title="Réinitialiser l'objectif du jour"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-          <div className="flex flex-col gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => onAcceptChallenge(currentChallenge.id)}
-              className="px-3 py-1 bg-[#4A6B3F] text-white rounded-full text-[11px] font-medium"
-            >
-              J'accepte
-            </button>
-            <button
-              type="button"
-              onClick={() => onDeclineChallenge(currentChallenge.id)}
-              className="px-2 py-0.5 text-[10px] text-[#8A8884] hover:text-[#1F1A15]"
-            >
-              Passer
-            </button>
-          </div>
+
+          {/* Actions interactives selon le statut */}
+          {currentChallenge.status === "pending" && (
+            <div className="flex items-center gap-2 pt-2 border-t border-[#E8DDC9]/60">
+              <button
+                type="button"
+                onClick={() => onValidateChallenge(currentChallenge)}
+                className="flex-1 py-1.5 px-3 bg-[#4A6B3F] hover:bg-[#3D5933] text-white rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Valider</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onFailChallenge(currentChallenge)}
+                className="py-1.5 px-3 bg-white border border-[#E8DDC9] hover:border-[#A8453F] text-[#A8453F] rounded-full text-xs font-semibold flex items-center justify-center gap-1 active:scale-98 transition-all"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Échoué</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSkipChallenge(currentChallenge)}
+                className="py-1.5 px-3 text-xs text-[#8A8884] hover:text-[#1F1A15] font-medium flex items-center gap-1 transition-colors"
+              >
+                <SkipForward className="w-3 h-3" />
+                <span>Passer</span>
+              </button>
+            </div>
+          )}
+
+          {currentChallenge.status === "accepted" && (
+            <div className="flex items-center gap-2 pt-2 border-t border-[#E8DDC9]/60">
+              <button
+                type="button"
+                onClick={() => onValidateChallenge(currentChallenge)}
+                className="flex-1 py-1.5 px-3 bg-[#4A6B3F] hover:bg-[#3D5933] text-white rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Valider l'objectif</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onFailChallenge(currentChallenge)}
+                className="py-1.5 px-3 bg-white border border-[#E8DDC9] hover:border-[#A8453F] text-[#A8453F] rounded-full text-xs font-semibold flex items-center justify-center gap-1 active:scale-98 transition-all"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Échoué</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSkipChallenge(currentChallenge)}
+                className="py-1.5 px-3 text-xs text-[#8A8884] hover:text-[#1F1A15] font-medium flex items-center gap-1 transition-colors"
+              >
+                <SkipForward className="w-3 h-3" />
+                <span>Passer</span>
+              </button>
+            </div>
+          )}
+
+          {currentChallenge.status === "completed" && (
+            <div className="pt-2 border-t border-[#E8DDC9]/60 flex items-center justify-between text-xs text-[#4A6B3F]">
+              <span className="font-medium">Objectif accompli aujourd'hui avec brio.</span>
+              <button
+                type="button"
+                onClick={() => onResetChallenge(currentChallenge.id)}
+                className="text-[11px] underline text-[#55534F] hover:text-[#1F1A15]"
+              >
+                Modifier
+              </button>
+            </div>
+          )}
+
+          {currentChallenge.status === "failed" && (
+            <div className="pt-2 border-t border-[#E8DDC9]/60 flex items-center justify-between text-xs text-[#A8453F]">
+              <span className="font-medium">Objectif non tenu aujourd'hui. Nouveau départ demain !</span>
+              <button
+                type="button"
+                onClick={() => onResetChallenge(currentChallenge.id)}
+                className="text-[11px] underline text-[#55534F] hover:text-[#1F1A15]"
+              >
+                Modifier
+              </button>
+            </div>
+          )}
+
+          {currentChallenge.status === "skipped" && (
+            <div className="pt-2 border-t border-[#E8DDC9]/60 flex items-center justify-between text-xs text-[#8A8884]">
+              <span>Objectif ignoré pour aujourd'hui.</span>
+              <button
+                type="button"
+                onClick={() => onResetChallenge(currentChallenge.id)}
+                className="text-[11px] underline text-[#55534F] hover:text-[#1F1A15]"
+              >
+                Reprendre
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {/* 4.7 Les dernières dépenses */}
-      <div className="px-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-fraunces text-base font-semibold text-[#1F1A15]">
-            Dernières entrées
-          </h2>
-          {state.expenses.length > 0 && (
-            <button
-              type="button"
-              onClick={onOpenFullHistory}
-              className="text-xs text-[#B5541F] hover:underline flex items-center gap-1 font-medium"
-            >
-              <span>Tout voir</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+      {!isFocusMode && (
+        <div className="px-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-fraunces text-base font-semibold text-[#1F1A15]">
+              Dernières entrées
+            </h2>
+            {state.expenses.length > 0 && (
+              <button
+                type="button"
+                onClick={onOpenFullHistory}
+                className="text-xs text-[#B5541F] hover:underline flex items-center gap-1 font-medium"
+              >
+                <span>Tout voir</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {lastFiveExpenses.length === 0 ? (
+            /* Encart vide chaleureux si aucune dépense (Partie 4.7 & 22.3) */
+            <div className="p-6 bg-white rounded-[14px] border border-[#E8DDC9] text-center">
+              <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-[#FAF6EF] flex items-center justify-center">
+                <CaurisIcon size={22} color="#C9922E" filled />
+              </div>
+              <p className="text-xs text-[#55534F] leading-relaxed mb-3">
+                Ton carnet est vierge. Ajoute ta première dépense quand tu veux — je saurai alors mieux t'aider.
+              </p>
+              <button
+                type="button"
+                onClick={() => onOpenNewExpense()}
+                className="text-xs text-[#B5541F] font-semibold underline"
+              >
+                Ajouter ma première dépense
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {lastFiveExpenses.map((exp) => {
+                const cat = state.categories.find((c) => c.id === exp.categoryId);
+                const expDate = new Date(exp.timestamp);
+                const isToday = isSameDay(exp.timestamp, now.getTime());
+                const timeDisplay = isToday
+                  ? `${expDate.getHours()}h${expDate.getMinutes().toString().padStart(2, "0")}`
+                  : expDate.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+
+                return (
+                  <div
+                    key={exp.id}
+                    className="p-3 bg-white rounded-[14px] border border-[#E8DDC9]/70 flex items-center justify-between shadow-xs transition-all hover:bg-neutral-50"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: cat?.color || "#8A8884" }}
+                      />
+                      <div>
+                        <span className="text-xs font-medium text-[#1F1A15] block">
+                          {exp.label || cat?.name || "Dépense"}
+                        </span>
+                        <span className="text-[10px] text-[#8A8884]">
+                          {cat?.name} · {timeDisplay}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="text-sm font-fraunces font-bold text-[#1F1A15] tab-num block">
+                          {formatFCFA(exp.amount)}
+                        </span>
+                        {exp.roundUpSaved && (
+                          <span className="text-[10px] text-[#C9922E] flex items-center justify-end gap-0.5">
+                            <CaurisIcon size={10} color="#C9922E" filled />
+                            +{formatFCFA(exp.roundUpSaved)}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onDeleteExpense(exp.id)}
+                        className="text-[#8A8884] hover:text-[#A8453F] p-1"
+                        title="Supprimer"
+                      >
+                        <BalaiIcon size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
-
-        {lastFiveExpenses.length === 0 ? (
-          /* Encart vide chaleureux si aucune dépense (Partie 4.7 & 22.3) */
-          <div className="p-6 bg-white rounded-[14px] border border-[#E8DDC9] text-center">
-            <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-[#FAF6EF] flex items-center justify-center">
-              <CaurisIcon size={22} color="#C9922E" filled />
-            </div>
-            <p className="text-xs text-[#55534F] leading-relaxed mb-3">
-              Ton carnet est vierge. Ajoute ta première dépense quand tu veux — je saurai alors mieux t'aider.
-            </p>
-            <button
-              type="button"
-              onClick={() => onOpenNewExpense()}
-              className="text-xs text-[#B5541F] font-semibold underline"
-            >
-              Ajouter ma première dépense
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {lastFiveExpenses.map((exp) => {
-              const cat = state.categories.find((c) => c.id === exp.categoryId);
-              const expDate = new Date(exp.timestamp);
-              const isToday = isSameDay(exp.timestamp, now.getTime());
-              const timeDisplay = isToday
-                ? `${expDate.getHours()}h${expDate.getMinutes().toString().padStart(2, "0")}`
-                : expDate.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-
-              return (
-                <div
-                  key={exp.id}
-                  className="p-3 bg-white rounded-[14px] border border-[#E8DDC9]/70 flex items-center justify-between shadow-xs transition-all hover:bg-neutral-50"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: cat?.color || "#8A8884" }}
-                    />
-                    <div>
-                      <span className="text-xs font-medium text-[#1F1A15] block">
-                        {exp.label || cat?.name || "Dépense"}
-                      </span>
-                      <span className="text-[10px] text-[#8A8884]">
-                        {cat?.name} · {timeDisplay}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <span className="text-sm font-fraunces font-bold text-[#1F1A15] tab-num block">
-                        {formatFCFA(exp.amount)}
-                      </span>
-                      {exp.roundUpSaved && (
-                        <span className="text-[10px] text-[#C9922E] flex items-center justify-end gap-0.5">
-                          <CaurisIcon size={10} color="#C9922E" filled />
-                          +{formatFCFA(exp.roundUpSaved)}
-                        </span>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => onDeleteExpense(exp.id)}
-                      className="text-[#8A8884] hover:text-[#A8453F] p-1"
-                      title="Supprimer"
-                    >
-                      <BalaiIcon size={16} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };

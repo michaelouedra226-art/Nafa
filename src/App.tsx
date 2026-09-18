@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { AppProfile, AppState, Expense, Goal, Income, QuickTile, Debt, Tontine } from "./types";
+import { AppProfile, AppState, Expense, Goal, Income, QuickTile, Debt, Tontine, Transaction, DailyChallenge } from "./types";
 import { loadAppState, saveAppState, resetAppState, DEFAULT_APP_STATE } from "./utils/storage";
 import { TodayScreen } from "./components/screens/TodayScreen";
 import { GoalsScreen } from "./components/screens/GoalsScreen";
@@ -111,9 +111,12 @@ export function App() {
     onShowToast: showToast,
   });
 
-  // Synchronisation avec localStorage
+  // Synchronisation débouncée avec localStorage
   useEffect(() => {
-    saveAppState(state);
+    const timer = setTimeout(() => {
+      saveAppState(state);
+    }, 150);
+    return () => clearTimeout(timer);
   }, [state]);
 
   // Gestion du mode sombre
@@ -162,10 +165,27 @@ export function App() {
 
   // AJOUT D'UNE DÉPENSE
   const handleAddExpense = (newExpData: Omit<Expense, "id">, roundUpToGoalId?: string) => {
+    const totalImpact = newExpData.amount + (newExpData.roundUpSaved || 0);
+    const currentPocket = state.profile.pocketBalance;
+
+    // Règle de protection : blocage si dépassement du solde en poche
+    if (currentPocket !== undefined && totalImpact > currentPocket) {
+      showToast(`Solde insuffisant. Il te reste ${currentPocket.toLocaleString("fr-FR")} F.`);
+      return;
+    }
+
     const newExpense: Expense = {
       ...newExpData,
       id: `exp_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
     };
+
+    const category = state.categories.find((c) => c.id === newExpense.categoryId);
+    const catName = category ? category.name : "Dépense";
+    const targetGoal = roundUpToGoalId ? state.goals.find((g) => g.id === roundUpToGoalId) : undefined;
+    const goalName = targetGoal ? targetGoal.name : "Épargne";
+
+    const newPocketBalance =
+      currentPocket !== undefined ? Math.max(0, currentPocket - totalImpact) : undefined;
 
     setState((prev) => {
       let updatedGoals = [...prev.goals];
@@ -192,14 +212,34 @@ export function App() {
         });
       }
 
-      // Mise à jour du solde en poche si renseigné
-      const newPocketBalance =
-        prev.profile.pocketBalance !== undefined
-          ? Math.max(0, prev.profile.pocketBalance - newExpense.amount - (newExpense.roundUpSaved || 0))
-          : undefined;
-
       if (triggeredCelebration) {
         setCelebrationGoal(triggeredCelebration);
+      }
+
+      // Journalisation des transactions unifiées
+      const newTransactions: Transaction[] = [
+        {
+          id: `tx_exp_${newExpense.id}`,
+          type: "expense",
+          amount: newExpense.amount,
+          direction: "out",
+          categoryId: newExpense.categoryId,
+          label: newExpense.label || catName,
+          timestamp: newExpense.timestamp,
+        },
+      ];
+
+      if (newExpense.roundUpSaved && newExpense.roundUpSaved > 0) {
+        newTransactions.push({
+          id: `tx_rup_${newExpense.id}`,
+          type: "round_up",
+          amount: newExpense.roundUpSaved,
+          direction: "out",
+          goalId: roundUpToGoalId,
+          label: `Arrondi vers « ${goalName} »`,
+          timestamp: newExpense.timestamp,
+          relatedExpenseId: newExpense.id,
+        });
       }
 
       return {
@@ -210,10 +250,18 @@ export function App() {
         },
         expenses: [newExpense, ...prev.expenses],
         goals: updatedGoals,
+        transactions: [...newTransactions, ...(prev.transactions || [])],
       };
     });
 
-    showToast("Dépense enregistrée");
+    const soldeStr = newPocketBalance !== undefined ? ` · Solde : ${newPocketBalance.toLocaleString("fr-FR")} F` : "";
+    if (newExpense.roundUpSaved && newExpense.roundUpSaved > 0) {
+      showToast(
+        `−${newExpense.amount.toLocaleString("fr-FR")} F (${catName}) · +${newExpense.roundUpSaved.toLocaleString("fr-FR")} F vers « ${goalName} »${soldeStr}`
+      );
+    } else {
+      showToast(`−${newExpense.amount.toLocaleString("fr-FR")} F (${catName})${soldeStr}`);
+    }
   };
 
   // AJOUT D'UN REVENU
@@ -225,6 +273,13 @@ export function App() {
       ...newIncData,
       id: `inc_${Date.now()}`,
     };
+
+    const savedPart = saveToGoal ? saveToGoal.amount : 0;
+    const currentPocket = state.profile.pocketBalance;
+    const newPocketBalance =
+      currentPocket !== undefined
+        ? currentPocket + newIncome.amount - savedPart
+        : newIncome.amount - savedPart;
 
     setState((prev) => {
       let updatedGoals = [...prev.goals];
@@ -250,13 +305,32 @@ export function App() {
         });
       }
 
-      const newPocketBalance =
-        prev.profile.pocketBalance !== undefined
-          ? prev.profile.pocketBalance + newIncome.amount
-          : prev.profile.pocketBalance;
-
       if (triggeredCelebration) {
         setCelebrationGoal(triggeredCelebration);
+      }
+
+      const newTransactions: Transaction[] = [
+        {
+          id: `tx_inc_${newIncome.id}`,
+          type: "income",
+          amount: newIncome.amount,
+          direction: "in",
+          label: newIncome.label || newIncome.category || "Revenu",
+          timestamp: newIncome.timestamp,
+        },
+      ];
+
+      if (saveToGoal && saveToGoal.amount > 0) {
+        const goal = prev.goals.find((g) => g.id === saveToGoal.goalId);
+        newTransactions.push({
+          id: `tx_gldep_${Date.now()}`,
+          type: "goal_deposit",
+          amount: saveToGoal.amount,
+          direction: "out",
+          goalId: saveToGoal.goalId,
+          label: `Épargne sur revenu vers « ${goal?.name || "Projet"} »`,
+          timestamp: newIncome.timestamp,
+        });
       }
 
       return {
@@ -267,10 +341,11 @@ export function App() {
         },
         incomes: [newIncome, ...prev.incomes],
         goals: updatedGoals,
+        transactions: [...newTransactions, ...(prev.transactions || [])],
       };
     });
 
-    showToast("Revenu enregistré");
+    showToast(`+${newIncome.amount.toLocaleString("fr-FR")} F · Solde disponible : ${newPocketBalance.toLocaleString("fr-FR")} F`);
   };
 
   // RATTRAPAGE DE DÉPENSES GROUPÉES
@@ -280,9 +355,20 @@ export function App() {
       id: `exp_batch_${Date.now()}_${idx}`,
     }));
 
+    const batchTransactions: Transaction[] = created.map((exp) => ({
+      id: `tx_exp_${exp.id}`,
+      type: "expense",
+      amount: exp.amount,
+      direction: "out",
+      categoryId: exp.categoryId,
+      label: exp.label,
+      timestamp: exp.timestamp,
+    }));
+
     setState((prev) => ({
       ...prev,
       expenses: [...created, ...prev.expenses],
+      transactions: [...batchTransactions, ...(prev.transactions || [])],
     }));
 
     showToast(`${created.length} dépenses rattrapées`);
@@ -293,6 +379,9 @@ export function App() {
     setState((prev) => ({
       ...prev,
       expenses: prev.expenses.filter((e) => e.id !== id),
+      transactions: (prev.transactions || []).filter(
+        (t) => t.id !== `tx_exp_${id}` && t.relatedExpenseId !== id
+      ),
     }));
     showToast("Dépense retirée");
   };
@@ -304,9 +393,19 @@ export function App() {
       id: `exp_${Date.now()}`,
       timestamp: Date.now(),
     };
+    const txCopy: Transaction = {
+      id: `tx_exp_${copy.id}`,
+      type: "expense",
+      amount: copy.amount,
+      direction: "out",
+      categoryId: copy.categoryId,
+      label: copy.label,
+      timestamp: copy.timestamp,
+    };
     setState((prev) => ({
       ...prev,
       expenses: [copy, ...prev.expenses],
+      transactions: [txCopy, ...(prev.transactions || [])],
     }));
     showToast("Dépense dupliquée");
   };
@@ -323,6 +422,18 @@ export function App() {
 
   // DÉPÔT VERS OBJECTIF
   const handleAddAmountToGoal = (goalId: string, amount: number) => {
+    const currentPocket = state.profile.pocketBalance;
+
+    // Règle de protection : blocage si solde insuffisant
+    if (currentPocket !== undefined && amount > currentPocket) {
+      showToast(`Solde insuffisant. Il te reste ${currentPocket.toLocaleString("fr-FR")} F.`);
+      return;
+    }
+
+    const targetGoal = state.goals.find((g) => g.id === goalId);
+    const goalName = targetGoal ? targetGoal.name : "Projet";
+    const newPocketBalance = currentPocket !== undefined ? Math.max(0, currentPocket - amount) : undefined;
+
     setState((prev) => {
       let triggeredCelebration: Goal | null = null;
       const updatedGoals = prev.goals.map((g) => {
@@ -347,12 +458,29 @@ export function App() {
         setCelebrationGoal(triggeredCelebration);
       }
 
+      const goalTx: Transaction = {
+        id: `tx_dep_${Date.now()}`,
+        type: "goal_deposit",
+        amount,
+        direction: "out",
+        goalId,
+        label: `Versement vers « ${goalName} »`,
+        timestamp: Date.now(),
+      };
+
       return {
         ...prev,
+        profile: {
+          ...prev.profile,
+          pocketBalance: newPocketBalance,
+        },
         goals: updatedGoals,
+        transactions: [goalTx, ...(prev.transactions || [])],
       };
     });
-    showToast(`+${amount} F épargné !`);
+
+    const soldeStr = newPocketBalance !== undefined ? ` · Solde : ${newPocketBalance.toLocaleString("fr-FR")} F` : "";
+    showToast(`−${amount.toLocaleString("fr-FR")} F vers « ${goalName} »${soldeStr}`);
   };
 
   // CRÉATION D'OBJECTIF
@@ -455,24 +583,122 @@ export function App() {
     }));
   };
 
-  // DÉFIS QUOTIDIENS
-  const handleAcceptChallenge = (challengeId: string) => {
-    setState((prev) => ({
-      ...prev,
-      dailyChallenges: prev.dailyChallenges.map((c) =>
-        c.id === challengeId ? { ...c, status: "accepted" } : c
-      ),
-    }));
-    showToast("Défi accepté ! Tiens bon aujourd'hui.");
+  // DÉFIS / OBJECTIFS DU JOUR
+  const handleAcceptChallenge = (challenge: DailyChallenge | string) => {
+    const challengeId = typeof challenge === "string" ? challenge : challenge.id;
+    setState((prev) => {
+      const exists = prev.dailyChallenges.some((c) => c.id === challengeId);
+      if (exists) {
+        return {
+          ...prev,
+          dailyChallenges: prev.dailyChallenges.map((c) =>
+            c.id === challengeId ? { ...c, status: "accepted" as const } : c
+          ),
+        };
+      }
+      if (typeof challenge !== "string") {
+        return {
+          ...prev,
+          dailyChallenges: [{ ...challenge, status: "accepted" as const }, ...prev.dailyChallenges],
+        };
+      }
+      return prev;
+    });
+    showToast("Objectif du jour accepté ! Tiens bon.");
   };
 
-  const handleDeclineChallenge = (challengeId: string) => {
+  const handleValidateChallenge = (challenge: DailyChallenge | string) => {
+    const challengeId = typeof challenge === "string" ? challenge : challenge.id;
+    setState((prev) => {
+      const exists = prev.dailyChallenges.some((c) => c.id === challengeId);
+      if (exists) {
+        return {
+          ...prev,
+          dailyChallenges: prev.dailyChallenges.map((c) =>
+            c.id === challengeId
+              ? { ...c, status: "completed" as const, completedAt: Date.now() }
+              : c
+          ),
+        };
+      }
+      if (typeof challenge !== "string") {
+        return {
+          ...prev,
+          dailyChallenges: [
+            { ...challenge, status: "completed" as const, completedAt: Date.now() },
+            ...prev.dailyChallenges,
+          ],
+        };
+      }
+      return prev;
+    });
+    showToast("Bravo ! Objectif du jour validé avec succès.");
+  };
+
+  const handleFailChallenge = (challenge: DailyChallenge | string) => {
+    const challengeId = typeof challenge === "string" ? challenge : challenge.id;
+    setState((prev) => {
+      const exists = prev.dailyChallenges.some((c) => c.id === challengeId);
+      if (exists) {
+        return {
+          ...prev,
+          dailyChallenges: prev.dailyChallenges.map((c) =>
+            c.id === challengeId
+              ? { ...c, status: "failed" as const, failedAt: Date.now() }
+              : c
+          ),
+        };
+      }
+      if (typeof challenge !== "string") {
+        return {
+          ...prev,
+          dailyChallenges: [
+            { ...challenge, status: "failed" as const, failedAt: Date.now() },
+            ...prev.dailyChallenges,
+          ],
+        };
+      }
+      return prev;
+    });
+    showToast("Objectif du jour marqué comme échoué. Demain est un autre jour.");
+  };
+
+  const handleSkipChallenge = (challenge: DailyChallenge | string) => {
+    const challengeId = typeof challenge === "string" ? challenge : challenge.id;
+    setState((prev) => {
+      const exists = prev.dailyChallenges.some((c) => c.id === challengeId);
+      if (exists) {
+        return {
+          ...prev,
+          dailyChallenges: prev.dailyChallenges.map((c) =>
+            c.id === challengeId
+              ? { ...c, status: "skipped" as const, skippedAt: Date.now() }
+              : c
+          ),
+        };
+      }
+      if (typeof challenge !== "string") {
+        return {
+          ...prev,
+          dailyChallenges: [
+            { ...challenge, status: "skipped" as const, skippedAt: Date.now() },
+            ...prev.dailyChallenges,
+          ],
+        };
+      }
+      return prev;
+    });
+    showToast("Objectif du jour passé.");
+  };
+
+  const handleResetChallenge = (challengeId: string) => {
     setState((prev) => ({
       ...prev,
       dailyChallenges: prev.dailyChallenges.map((c) =>
-        c.id === challengeId ? { ...c, status: "declined" } : c
+        c.id === challengeId ? { ...c, status: "pending" as const } : c
       ),
     }));
+    showToast("Objectif réinitialisé.");
   };
 
   // MISE À JOUR DU PROFIL
@@ -501,6 +727,14 @@ export function App() {
         <OnboardingFlow
           onComplete={handleCompleteOnboarding}
           onImportFromPdf={handlePdfParsedState}
+          onRestoreJson={(jsonStr) => {
+            try {
+              const parsed = JSON.parse(jsonStr);
+              handlePdfParsedState(parsed);
+            } catch {
+              showToast("Fichier de sauvegarde invalide");
+            }
+          }}
         />
       </div>
     );
@@ -564,7 +798,11 @@ export function App() {
                   onQuickTileTap={handleQuickTileTap}
                   onSetPocketBalance={() => setShowSetPocketModal(true)}
                   onAcceptChallenge={handleAcceptChallenge}
-                  onDeclineChallenge={handleDeclineChallenge}
+                  onValidateChallenge={handleValidateChallenge}
+                  onFailChallenge={handleFailChallenge}
+                  onSkipChallenge={handleSkipChallenge}
+                  onResetChallenge={handleResetChallenge}
+                  onDeclineChallenge={handleSkipChallenge}
                 />
               )}
 
@@ -713,6 +951,7 @@ export function App() {
             goals={state.goals}
             smallestDenomination={state.profile.smallestDenomination}
             roundUpSavingsEnabled={state.profile.roundUpSavingsEnabled}
+            pocketBalance={state.profile.pocketBalance}
             defaultCategory={expenseDefaultCat}
             defaultAmount={expenseDefaultAmount}
             onClose={() => {
@@ -801,8 +1040,25 @@ export function App() {
                 <button
                   type="button"
                   onClick={() => {
+                    const newBal = tempPocketVal ? Number(tempPocketVal) : undefined;
+                    const prevBal = state.profile.pocketBalance || 0;
+                    if (newBal !== undefined) {
+                      const diff = newBal - prevBal;
+                      const adjTx: Transaction = {
+                        id: `tx_adj_${Date.now()}`,
+                        type: "balance_adjustment",
+                        amount: Math.abs(diff),
+                        direction: diff >= 0 ? "in" : "out",
+                        label: "Ajustement solde en poche",
+                        timestamp: Date.now(),
+                      };
+                      setState((prev) => ({
+                        ...prev,
+                        transactions: [adjTx, ...(prev.transactions || [])],
+                      }));
+                    }
                     handleUpdateProfile({
-                      pocketBalance: tempPocketVal ? Number(tempPocketVal) : undefined,
+                      pocketBalance: newBal,
                     });
                     setShowSetPocketModal(false);
                     setTempPocketVal("");

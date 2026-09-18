@@ -10,6 +10,7 @@ interface NewExpenseModalProps {
   goals: Goal[];
   smallestDenomination: RoundingUnit;
   roundUpSavingsEnabled: boolean;
+  pocketBalance?: number;
   onClose: () => void;
   onAddExpense: (expense: Omit<Expense, "id">, roundUpToGoalId?: string) => void;
   defaultCategory?: string;
@@ -21,6 +22,7 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
   goals,
   smallestDenomination,
   roundUpSavingsEnabled,
+  pocketBalance,
   onClose,
   onAddExpense,
   defaultCategory,
@@ -39,6 +41,14 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
   const activeGoal = goals.find((g) => !g.completed && !g.archived);
   const currentAmount = Number(amountStr) || 0;
   const roundUpCalc = calculateRoundUp(currentAmount, smallestDenomination);
+
+  const roundUpDiff =
+    roundUpSavingsEnabled && acceptRoundUp && roundUpCalc.diff > 0 && activeGoal
+      ? roundUpCalc.diff
+      : 0;
+
+  const totalImpact = currentAmount + roundUpDiff;
+  const isInsufficient = pocketBalance !== undefined && totalImpact > pocketBalance;
 
   // Keypad click handler
   const handleKeyClick = (val: string) => {
@@ -61,8 +71,13 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
     setAmountStr((prev) => (prev === "0" ? val : prev + val));
   };
 
+  const handleShortcutSet = (amt: number) => {
+    setAmountStr(amt.toString());
+  };
+
   const handleValidate = () => {
     if (currentAmount <= 0) return;
+    if (isInsufficient) return;
 
     setShowFlyAnim(true);
 
@@ -73,10 +88,7 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
       timestamp = new Date(customDate).getTime() + (new Date().getHours() * 3600000);
     }
 
-    const roundUpDiff =
-      roundUpSavingsEnabled && acceptRoundUp && roundUpCalc.diff > 0 && activeGoal
-        ? roundUpCalc.diff
-        : undefined;
+    const finalRoundUp = roundUpDiff > 0 && activeGoal ? roundUpDiff : undefined;
 
     setTimeout(() => {
       onAddExpense(
@@ -85,10 +97,10 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
           categoryId,
           label: note.trim() || undefined,
           timestamp,
-          roundUpSaved: roundUpDiff,
-          targetGoalId: roundUpDiff && activeGoal ? activeGoal.id : undefined,
+          roundUpSaved: finalRoundUp,
+          targetGoalId: finalRoundUp && activeGoal ? activeGoal.id : undefined,
         },
-        roundUpDiff && activeGoal ? activeGoal.id : undefined
+        finalRoundUp && activeGoal ? activeGoal.id : undefined
       );
       onClose();
     }, 400);
@@ -140,6 +152,20 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
               </span>
               <span className="text-sm font-medium text-[#8A8884]">FCFA</span>
             </div>
+          </div>
+
+          {/* Raccourcis de montants rapides */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {[100, 200, 500, 1000, 2000, 5000].map((amt) => (
+              <button
+                key={amt}
+                type="button"
+                onClick={() => handleShortcutSet(amt)}
+                className="px-2.5 py-1 rounded-full text-xs font-medium bg-[#E8DDC9]/50 hover:bg-[#E8DDC9] text-[#1F1A15] shrink-0 active:scale-95 transition-all"
+              >
+                {amt.toLocaleString("fr-FR")} F
+              </button>
+            ))}
           </div>
 
           {/* Choix de la catégorie en pastilles défilantes */}
@@ -210,38 +236,68 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
 
           {/* Encart Arrondi d'épargne (si activé et calcul positif) */}
           {roundUpSavingsEnabled && currentAmount > 0 && roundUpCalc.diff > 0 && activeGoal && (
-            <div className="p-3 bg-[#E8DDC9]/40 rounded-[12px] border border-[#E8DDC9] flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <CaurisIcon size={18} color="#C9922E" filled />
-                <div>
-                  <span className="font-medium text-[#1F1A15]">
-                    Arrondir à {formatFCFA(roundUpCalc.targetRounded)} ?
-                  </span>
-                  <span className="block text-[10px] text-[#8A8884]">
-                    +{formatFCFA(roundUpCalc.diff)} vers {activeGoal.name}
-                  </span>
+            <div className="p-3 bg-[#E8DDC9]/40 rounded-[12px] border border-[#E8DDC9] space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CaurisIcon size={18} color="#C9922E" filled />
+                  <div>
+                    <span className="font-medium text-[#1F1A15]">
+                      Arrondir à {formatFCFA(roundUpCalc.targetRounded)} ?
+                    </span>
+                    <span className="block text-[10px] text-[#8A8884]">
+                      +{formatFCFA(roundUpCalc.diff)} vers {activeGoal.name}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setAcceptRoundUp(true)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                      acceptRoundUp ? "bg-[#B5541F] text-white" : "bg-white text-[#55534F]"
+                    }`}
+                  >
+                    Oui
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAcceptRoundUp(false)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                      !acceptRoundUp ? "bg-[#B5541F] text-white" : "bg-white text-[#55534F]"
+                    }`}
+                  >
+                    Non
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setAcceptRoundUp(true)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                    acceptRoundUp ? "bg-[#B5541F] text-white" : "bg-white text-[#55534F]"
-                  }`}
-                >
-                  Oui
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAcceptRoundUp(false)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                    !acceptRoundUp ? "bg-[#B5541F] text-white" : "bg-white text-[#55534F]"
-                  }`}
-                >
-                  Non
-                </button>
-              </div>
+
+              {/* Décomposition explicite de l'impact */}
+              {acceptRoundUp && (
+                <div className="pt-2 border-t border-[#E8DDC9] grid grid-cols-3 text-[11px] text-[#55534F]">
+                  <div>
+                    <span className="text-[#8A8884] block text-[10px]">Dépense</span>
+                    <span className="font-semibold text-[#1F1A15]">{formatFCFA(currentAmount)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#8A8884] block text-[10px]">Arrondi</span>
+                    <span className="font-semibold text-[#C9922E]">+{formatFCFA(roundUpCalc.diff)}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[#8A8884] block text-[10px]">Impact poche</span>
+                    <span className="font-bold text-[#B5541F]">{formatFCFA(totalImpact)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Alerte de solde insuffisant */}
+          {isInsufficient && pocketBalance !== undefined && (
+            <div className="p-3 bg-[#A8453F]/10 border border-[#A8453F]/30 rounded-[10px] text-xs text-[#A8453F] flex items-center gap-2">
+              <span>⚠️</span>
+              <span>
+                Solde de ta poche insuffisant ({formatFCFA(pocketBalance)} disponibles pour un impact de {formatFCFA(totalImpact)}).
+              </span>
             </div>
           )}
 
@@ -323,11 +379,11 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
           <motion.button
             whileTap={{ scale: 0.97 }}
             type="button"
-            disabled={currentAmount <= 0}
+            disabled={currentAmount <= 0 || isInsufficient}
             onClick={handleValidate}
             className="w-full py-3.5 bg-[#B5541F] hover:bg-[#A04514] active:bg-[#8F3B0E] disabled:opacity-30 text-[#FAF6EF] rounded-full text-base font-medium shadow-sm transition-all"
           >
-            Ajouter la dépense
+            {isInsufficient ? "Solde insuffisant" : "Ajouter la dépense"}
           </motion.button>
         </div>
       </motion.div>

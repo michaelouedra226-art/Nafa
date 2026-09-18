@@ -11,7 +11,7 @@ interface PdfExportModalProps {
 }
 
 export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }) => {
-  const [docType, setDocType] = useState<"rapport" | "attestation">("rapport");
+  const [docType, setDocType] = useState<"rapport" | "attestation" | "bourse_parents">("rapport");
   const [period, setPeriod] = useState<"this_month" | "all">("this_month");
   const [includeDetails, setIncludeDetails] = useState<boolean>(true);
   const [includeGoals, setIncludeGoals] = useState<boolean>(true);
@@ -135,7 +135,31 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ state, onClose }
                 </div>
               </button>
 
-              {/* Option 2 : Attestation d'épargne */}
+              {/* Option 2 : Synthèse Parents & Bourse (P0 WAOUH) */}
+              <button
+                type="button"
+                onClick={() => setDocType("bourse_parents")}
+                className={`flex items-start gap-3 p-3.5 rounded-[14px] text-left transition-all border ${
+                  docType === "bourse_parents"
+                    ? "bg-white border-[#4A6B3F] shadow-xs"
+                    : "bg-[#FAF6EF] border-[#E8DDC9] opacity-80 hover:opacity-100"
+                }`}
+              >
+                <div className={`mt-0.5 p-2 rounded-full ${docType === "bourse_parents" ? "bg-[#4A6B3F] text-white" : "bg-[#E8DDC9] text-[#55534F]"}`}>
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-[#1F1A15]">Synthèse Parents & Bourse (1 page)</span>
+                    {docType === "bourse_parents" && <Check className="w-4 h-4 text-[#4A6B3F]" />}
+                  </div>
+                  <p className="text-[11px] text-[#8A8884] mt-0.5 leading-relaxed">
+                    Format concis et solennel sur 1 page A4 avec logo, répartition des dépenses, déclaration d'honneur et signature certifiée.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 3 : Attestation d'épargne */}
               <button
                 type="button"
                 onClick={() => setDocType("attestation")}

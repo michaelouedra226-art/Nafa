@@ -6,12 +6,14 @@ import { ArrowLeft, Check, Upload } from "lucide-react";
 
 interface OnboardingFlowProps {
   onComplete: (updatedState: Partial<AppState>) => void;
-  onRestoreJson: (json: string) => void;
+  onRestoreJson?: (json: string) => void;
+  onImportFromPdf?: (state: AppState) => void;
 }
 
 export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   onComplete,
   onRestoreJson,
+  onImportFromPdf,
 }) => {
   // Step 0: Splash, 1: Bienvenue, 2: Prénom, 3: Langue, 4: Situation, 5: Devise/Arrondis, 6: Revenus, 7: Objectif, 8: Budget, 9: Récapitulatif
   const [step, setStep] = useState<number>(0);
@@ -79,7 +81,16 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       reader.onload = (event) => {
         const text = event.target?.result;
         if (typeof text === "string") {
-          onRestoreJson(text);
+          if (onRestoreJson) {
+            onRestoreJson(text);
+          } else if (onImportFromPdf) {
+            try {
+              const parsed = JSON.parse(text);
+              onImportFromPdf(parsed);
+            } catch {
+              // Ignore parse error
+            }
+          }
         }
       };
       reader.readAsText(file);
