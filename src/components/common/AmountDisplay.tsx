@@ -1,5 +1,5 @@
 import React from "react";
-import { formatFCFA } from "../../utils/engine";
+import { AnimatedCounter } from "./AnimatedCounter";
 
 interface AmountDisplayProps {
   amount: number;
@@ -8,6 +8,7 @@ interface AmountDisplayProps {
   sign?: "+" | "-" | "none";
   color?: string;
   isPrivate?: boolean;
+  animate?: boolean;
 }
 
 export const AmountDisplay: React.FC<AmountDisplayProps> = ({
@@ -17,7 +18,22 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
   sign = "none",
   color,
   isPrivate = false,
+  animate = true,
 }) => {
+  if (animate) {
+    return (
+      <span style={color ? { color } : undefined} className="inline-flex">
+        <AnimatedCounter
+          value={amount}
+          currency={currency}
+          className={className}
+          sign={sign}
+          isPrivate={isPrivate}
+        />
+      </span>
+    );
+  }
+
   const formatted = Math.round(Math.abs(amount))
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, " ");

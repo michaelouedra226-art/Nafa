@@ -345,19 +345,19 @@ export function computeEndOfMonthRadar(state: AppState): EndOfMonthRadarResult {
   if (projectedBalance >= 5000) {
     status = "green";
     statusColor = "#4A6B3F";
-    shortPhrase = `À ce rythme, tu auras environ ${formatFCFA(projectedBalance)} le ${lastDayOfMonth}.`;
-    detailsPhrase = "Tu tiens le cap sans pression.";
+    shortPhrase = `À ce rythme, tu finiras le mois avec ≈ ${formatFCFA(projectedBalance)}`;
+    detailsPhrase = "Tu es large. Cap serein.";
   } else if (projectedBalance >= 0) {
     status = "orange";
     statusColor = "#C9922E";
-    shortPhrase = `À ce rythme, tu auras environ ${formatFCFA(projectedBalance)} le ${lastDayOfMonth}.`;
-    detailsPhrase = "Marge étroite. Priorise l'essentiel.";
+    shortPhrase = `À ce rythme, tu finiras le mois avec ≈ ${formatFCFA(projectedBalance)}`;
+    detailsPhrase = "Attention, marge serrée. Priorise l'essentiel.";
   } else {
     status = "red";
     statusColor = "#A8453F";
     const deficit = Math.abs(projectedBalance);
-    shortPhrase = `Risque de déficit d'environ ${formatFCFA(deficit)} le ${lastDayOfMonth}.`;
-    detailsPhrase = "Serre les dépenses dès aujourd'hui pour garder le contrôle.";
+    shortPhrase = `À ce rythme, tu vas finir dans le rouge (≈ -${formatFCFA(deficit)})`;
+    detailsPhrase = "Tu vas finir dans le rouge. Serre les dépenses dès aujourd'hui.";
   }
 
   return {
@@ -377,6 +377,8 @@ export function computeEndOfMonthRadar(state: AppState): EndOfMonthRadarResult {
 export interface MasteredStreakResult {
   streakDays: number;
   isMilestone: boolean; // >= 7 jours
+  milestoneBadge?: "bronze_7" | "silver_14" | "gold_30";
+  badgeName?: string;
   flameLevel: 1 | 2 | 3; // 1: 1-2j, 2: 3-6j, 3: >=7j
   message: string;
 }
@@ -385,37 +387,105 @@ export function computeMasteredDaysStreak(state: AppState): MasteredStreakResult
   const allowance = computeDailyAllowance(state);
   const now = new Date();
   
-  // Calcul basé sur les dépenses des jours précédents
-  let streak = 0;
-  
-  // Vérifier aujourd'hui : si pas de dépassement, déjà compté comme en cours
-  if (allowance.overspentAmount === 0) {
-    streak = 1;
+  // 1. Si aucune activité enregistrée dans l'historique : série à 0
+  const allTimestamps: number[] = [
+    ...state.expenses.map((e) => e.timestamp),
+    ...state.incomes.map((i) => i.timestamp),
+    ...(state.transactions || []).map((t) => t.timestamp),
+  ];
+  if (state.profile.observationStartTimestamp) {
+    allTimestamps.push(state.profile.observationStartTimestamp);
   }
 
-  // Analyser jusqu'à 30 jours en arrière
-  for (let i = 1; i <= 30; i++) {
+  if (allTimestamps.length === 0) {
+    return {
+      streakDays: 0,
+      isMilestone: false,
+      flameLevel: 1,
+      message: "Enregistre ta première dépense pour lancer ta série de jours maîtrisés.",
+    };
+  }
+
+  // 2. Détermination de la date réelle de début d'activité (aucun jour antérieur ne peut être compté)
+  const earliestTimestamp = Math.min(...allTimestamps);
+  const earliestDate = new Date(earliestTimestamp);
+  const earliestDayStart = new Date(
+    earliestDate.getFullYear(),
+    earliestDate.getMonth(),
+    earliestDate.getDate(),
+    0,
+    0,
+    0,
+    0
+  ).getTime();
+
+  // Seuil de dépense journalière de référence (avec marge de tolérance de 10%)
+  const dailyTarget =
+    state.profile.dailyBudgetTarget && state.profile.dailyBudgetTarget > 0
+      ? state.profile.dailyBudgetTarget
+      : allowance.monthlyBudget > 0
+      ? Math.round(allowance.monthlyBudget / 30)
+      : 3000;
+  const threshold = Math.max(1000, Math.round(dailyTarget * 1.1));
+
+  // 3. Évaluation d'aujourd'hui (Jour 0)
+  if (allowance.overspentAmount > 0) {
+    return {
+      streakDays: 0,
+      isMilestone: false,
+      flameLevel: 1,
+      badgeName: "Dépassement",
+      message: `Budget dépassé de ${formatFCFA(allowance.overspentAmount)} aujourd'hui. Resserre pour repartir du bon pied demain !`,
+    };
+  }
+
+  // Aujourd'hui est conforme
+  let streak = 1;
+
+  // 4. Analyse rétrospective des jours précédents (jusqu'à 60 jours au plus)
+  let consecutiveZeroSpendDays = 0;
+
+  for (let i = 1; i <= 60; i++) {
     const checkDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-    const dayStart = checkDate.getTime();
+    const dayStart = new Date(
+      checkDate.getFullYear(),
+      checkDate.getMonth(),
+      checkDate.getDate(),
+      0,
+      0,
+      0,
+      0
+    ).getTime();
     const dayEnd = dayStart + 86400000;
+
+    // Arrêt strict : impossible de compter des jours antérieurs à l'inscription / première activité
+    if (dayStart < earliestDayStart) {
+      break;
+    }
 
     const dayExpenses = state.expenses.filter(
       (e) => e.timestamp >= dayStart && e.timestamp < dayEnd
     );
 
-    // Si aucune dépense ce jour-là, on considère que le budget n'a pas été dépassé
     if (dayExpenses.length === 0) {
+      consecutiveZeroSpendDays++;
+      // Plus d'un jour sans dépense consécutif = période sans saisie / inactivité (rupture de série)
+      if (consecutiveZeroSpendDays > 1) {
+        break;
+      }
+      // 1 jour sans dépense isolé (zéro franc dépensé) est un jour maîtrisé
       streak++;
       continue;
     }
 
+    consecutiveZeroSpendDays = 0;
     const dayTotal = dayExpenses.reduce((s, e) => s + e.amount, 0);
-    const threshold = allowance.dailyAllowance > 0 ? allowance.dailyAllowance * 1.15 : 3000;
 
     if (dayTotal <= threshold) {
       streak++;
     } else {
-      break; // Le streak s'arrête au premier jour dépassé
+      // Dépassement budgétaire avéré ce jour-là : la série continue s'arrête
+      break;
     }
   }
 
@@ -423,10 +493,23 @@ export function computeMasteredDaysStreak(state: AppState): MasteredStreakResult
   const flameLevel: 1 | 2 | 3 = streak >= 7 ? 3 : streak >= 3 ? 2 : 1;
   
   let message = "";
-  if (streak >= 7) {
-    message = "Tu tiens le rythme. C’est ça la rigueur.";
+  let milestoneBadge: "bronze_7" | "silver_14" | "gold_30" | undefined = undefined;
+  let badgeName: string | undefined = undefined;
+
+  if (streak >= 30) {
+    milestoneBadge = "gold_30";
+    badgeName = "Maître du Cauris (30j)";
+    message = "Un mois entier de maîtrise absolue. Tu inspires le respect.";
+  } else if (streak >= 14) {
+    milestoneBadge = "silver_14";
+    badgeName = "Discipline d'Acier (14j)";
+    message = "Deux semaines sans faux pas. La rigueur paie toujours.";
+  } else if (streak >= 7) {
+    milestoneBadge = "bronze_7";
+    badgeName = "Cap des 7 jours";
+    message = "7 jours sans dépassement. Tu tiens le rythme. C’est ça la rigueur.";
   } else if (streak >= 3) {
-    message = "Belle régularité. Continue sur cette lancée.";
+    message = `Belle régularité sur ${streak} jours. Continue sur cette lancée.`;
   } else if (streak === 1 || streak === 2) {
     message = "Journée sous contrôle. La discipline commence ici.";
   } else {
@@ -436,6 +519,8 @@ export function computeMasteredDaysStreak(state: AppState): MasteredStreakResult
   return {
     streakDays: streak,
     isMilestone,
+    milestoneBadge,
+    badgeName,
     flameLevel,
     message,
   };

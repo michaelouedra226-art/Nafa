@@ -17,6 +17,8 @@ import { CaurisIcon } from "./components/icons/CustomIcons";
 import { Sun, Target, BookOpen, Clock, Plus, Check } from "lucide-react";
 import { useBackButton } from "./hooks/useBackButton";
 import { useBatteryOptimization } from "./hooks/useBatteryOptimization";
+import confetti from "canvas-confetti";
+import { soundEffects, triggerHapticFeedback } from "./utils/hapticsAndAudio";
 
 export function App() {
   const [state, setState] = useState<AppState>(() => loadAppState());
@@ -346,6 +348,48 @@ export function App() {
     });
 
     showToast(`+${newIncome.amount.toLocaleString("fr-FR")} F · Solde disponible : ${newPocketBalance.toLocaleString("fr-FR")} F`);
+  };
+
+  // MODE PAIE REÇUE (1.2 PRO)
+  const handleReceivePayday = (amount: number, label: string = "Salaire / Bourse") => {
+    const prevBal = state.profile.pocketBalance || 0;
+    const newBal = prevBal + amount;
+    const newInc: Income = {
+      id: `inc_payday_${Date.now()}`,
+      amount,
+      category: "Job",
+      label,
+      timestamp: Date.now(),
+    };
+    const tx: Transaction = {
+      id: `tx_inc_${newInc.id}`,
+      type: "income",
+      amount,
+      direction: "in",
+      label,
+      timestamp: Date.now(),
+    };
+
+    setState((prev) => ({
+      ...prev,
+      profile: {
+        ...prev.profile,
+        pocketBalance: newBal,
+      },
+      incomes: [newInc, ...prev.incomes],
+      transactions: [tx, ...(prev.transactions || [])],
+    }));
+
+    soundEffects.playCaurisClink();
+    triggerHapticFeedback([40, 50, 40]);
+    confetti({
+      particleCount: 65,
+      spread: 70,
+      origin: { y: 0.5 },
+      colors: ["#4A6B3F", "#C9922E", "#B5541F"],
+    });
+
+    showToast(`+${amount.toLocaleString("fr-FR")} F enregistrés · Solde en poche : ${newBal.toLocaleString("fr-FR")} F`);
   };
 
   // RATTRAPAGE DE DÉPENSES GROUPÉES
@@ -797,6 +841,7 @@ export function App() {
                   onDuplicateExpense={handleDuplicateExpense}
                   onQuickTileTap={handleQuickTileTap}
                   onSetPocketBalance={() => setShowSetPocketModal(true)}
+                  onReceivePayday={handleReceivePayday}
                   onAcceptChallenge={handleAcceptChallenge}
                   onValidateChallenge={handleValidateChallenge}
                   onFailChallenge={handleFailChallenge}

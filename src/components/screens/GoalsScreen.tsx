@@ -4,9 +4,10 @@ import confetti from "canvas-confetti";
 import { AppState, Goal, GoalMode, GoalVisual } from "../../types";
 import { CaurisIcon, CalebasseIcon, BaobabIcon, BogolanFrise } from "../icons/CustomIcons";
 import { ProgressionVisualTree } from "../goals/ProgressionVisualTree";
+import { AnimatedCounter } from "../common/AnimatedCounter";
 import { soundEffects, triggerHapticFeedback } from "../../utils/hapticsAndAudio";
 import { formatFCFA, simulateDeposit } from "../../utils/engine";
-import { Plus, MoreVertical, X, Check, Share2, Award, Calendar, Sparkles, Calculator, ArrowRight } from "lucide-react";
+import { Plus, MoreVertical, X, Check, Share2, Award, Calendar, Sparkles, Calculator, ArrowRight, Banknote } from "lucide-react";
 
 interface GoalsScreenProps {
   state: AppState;
@@ -62,23 +63,32 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
   const activeGoals = state.goals.filter((g) => !g.completed && !g.archived);
   const completedGoals = state.goals.filter((g) => g.completed);
 
+  const [flyingBill, setFlyingBill] = useState<{ amount: number; goalName: string } | null>(null);
+
   const handleDeposit = () => {
     if (!selectedGoalForAdd || Number(amountToAddStr) <= 0) return;
     const addedAmount = Number(amountToAddStr);
-    onAddAmountToGoal(selectedGoalForAdd.id, addedAmount);
+    const targetGoal = selectedGoalForAdd;
 
+    // Déclenchement de l'animation du billet volant vers l'objectif
+    setFlyingBill({ amount: addedAmount, goalName: targetGoal.name });
     soundEffects.playCaurisClink();
     triggerHapticFeedback([30, 40, 30]);
 
-    confetti({
-      particleCount: 55,
-      spread: 65,
-      origin: { y: 0.6 },
-      colors: ["#C9922E", "#B5541F", "#4A6B3F"],
-    });
+    setTimeout(() => {
+      onAddAmountToGoal(targetGoal.id, addedAmount);
 
-    setSelectedGoalForAdd(null);
-    setAmountToAddStr("");
+      confetti({
+        particleCount: 55,
+        spread: 65,
+        origin: { y: 0.6 },
+        colors: ["#C9922E", "#B5541F", "#4A6B3F"],
+      });
+
+      setSelectedGoalForAdd(null);
+      setAmountToAddStr("");
+      setFlyingBill(null);
+    }, 650);
   };
 
   const handleCreateSubmit = (e: React.FormEvent) => {
@@ -326,11 +336,11 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
                   </div>
                 </div>
 
-                {/* Zone montant */}
+                {/* Zone montant avec animation de comptage fluide */}
                 <div className="flex items-baseline justify-between mb-2">
-                  <span className="font-fraunces text-2xl font-bold text-[#1F1A15] tab-num">
-                    {formatFCFA(goal.currentAmount)}
-                  </span>
+                  <div className="font-fraunces text-2xl font-bold text-[#1F1A15] tab-num">
+                    <AnimatedCounter value={goal.currentAmount} />
+                  </div>
                   <span className="text-xs text-[#8A8884] tab-num">
                     sur {formatFCFA(goal.targetAmount)}
                   </span>
@@ -425,8 +435,8 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
             />
 
             {state.profile.pocketBalance !== undefined && Number(amountToAddStr) > state.profile.pocketBalance && (
-              <p className="text-[11px] text-red-600 font-medium mb-3">
-                Solde insuffisant (il te reste {state.profile.pocketBalance.toLocaleString("fr-FR")} F).
+              <p className="text-[11px] text-red-600 font-semibold mb-3">
+                Solde insuffisant. Il te reste {state.profile.pocketBalance.toLocaleString("fr-FR")} F.
               </p>
             )}
 
@@ -438,9 +448,10 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
                   Number(amountToAddStr) <= 0 ||
                   (state.profile.pocketBalance !== undefined && Number(amountToAddStr) > state.profile.pocketBalance)
                 }
-                className="flex-1 py-2 bg-[#B5541F] disabled:opacity-40 text-white rounded-full text-xs font-semibold active:scale-98 transition-all"
+                className="flex-1 py-2 bg-[#B5541F] disabled:opacity-40 text-white rounded-full text-xs font-semibold active:scale-98 transition-all flex items-center justify-center gap-1.5"
               >
-                Verser
+                <Banknote className="w-3.5 h-3.5" />
+                <span>Verser</span>
               </button>
               <button
                 type="button"
@@ -453,6 +464,36 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
           </div>
         </div>
       )}
+
+      {/* Animation 2.4 : Billet volant vers l'objectif */}
+      <AnimatePresence>
+        {flyingBill && (
+          <div className="fixed inset-0 pointer-events-none z-70 flex items-center justify-center">
+            <motion.div
+              initial={{ scale: 0.8, y: 120, opacity: 0, rotate: -8 }}
+              animate={{
+                scale: [0.8, 1.25, 1],
+                y: [120, -60, -180],
+                opacity: [0, 1, 0],
+                rotate: [-8, 6, -4],
+              }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.65, ease: "easeInOut" }}
+              className="px-4 py-2.5 bg-[#4A6B3F] text-white rounded-2xl shadow-xl flex items-center gap-2 border-2 border-[#C9922E]"
+            >
+              <Banknote className="w-6 h-6 text-[#FAF6EF]" />
+              <div className="flex flex-col">
+                <span className="font-fraunces text-sm font-bold text-white">
+                  +{flyingBill.amount.toLocaleString("fr-FR")} F
+                </span>
+                <span className="text-[10px] text-[#FAF6EF]/80 font-medium">
+                  vers {flyingBill.goalName}
+                </span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Modal Création d'un objectif (Partie 5.5) */}
       {showNewGoalModal && (

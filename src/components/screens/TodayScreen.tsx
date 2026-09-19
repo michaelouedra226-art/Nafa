@@ -12,6 +12,7 @@ import {
   computeMasteredDaysStreak,
   generateGrandBrotherDailyMessage,
 } from "../../utils/engine";
+import { AnimatedCounter } from "../common/AnimatedCounter";
 import { TTSVoicePlayer } from "../audio/TTSVoicePlayer";
 import {
   MoreVertical,
@@ -29,6 +30,8 @@ import {
   Focus,
   Eye,
   MessageCircle,
+  Banknote,
+  Award,
 } from "lucide-react";
 
 interface TodayScreenProps {
@@ -41,6 +44,7 @@ interface TodayScreenProps {
   onDuplicateExpense: (expense: Expense) => void;
   onQuickTileTap: (tile: QuickTile) => void;
   onSetPocketBalance: () => void;
+  onReceivePayday?: (amount: number, label: string) => void;
   onAcceptChallenge: (challenge: DailyChallenge | string) => void;
   onValidateChallenge: (challenge: DailyChallenge | string) => void;
   onFailChallenge: (challenge: DailyChallenge | string) => void;
@@ -59,6 +63,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   onDuplicateExpense,
   onQuickTileTap,
   onSetPocketBalance,
+  onReceivePayday,
   onAcceptChallenge,
   onValidateChallenge,
   onFailChallenge,
@@ -99,6 +104,30 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   const catSorties = todayExpenses
     .filter((e) => e.categoryId === "cat_sorties")
     .reduce((s, e) => s + e.amount, 0);
+
+  // Détection Mode Paie reçue (Partie 1.2 PRO)
+  const currentDay = now.getDate();
+  const grantDay = state.profile.incomeSources?.grantDay;
+  const isNearGrantDay = grantDay ? Math.abs(currentDay - grantDay) <= 2 : false;
+  const isPaydayPeriod = isNearGrantDay || currentDay >= 24 || currentDay <= 6;
+  const [showPaydayModal, setShowPaydayModal] = useState(false);
+  const [paydayAmountInput, setPaydayAmountInput] = useState<string>(
+    (state.profile.incomeSources?.grantAmount ||
+      state.profile.incomeSources?.jobAmount ||
+      "") as string
+  );
+
+  const handlePaydaySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = Number(paydayAmountInput);
+    if (amt <= 0) return;
+    if (onReceivePayday) {
+      onReceivePayday(amt, "Salaire / Bourse");
+    } else {
+      onSetPocketBalance();
+    }
+    setShowPaydayModal(false);
+  };
 
   // Dernières 5 dépenses
   const sortedExpenses = [...state.expenses].sort((a, b) => b.timestamp - a.timestamp);
@@ -162,13 +191,15 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             <span className="w-2 h-2 rounded-full bg-[#4A6B3F] shrink-0" />
             <span className="text-[#55534F]">Solde :</span>
             <span className="font-bold text-[#1F1A15] font-fraunces">
-              {state.profile.pocketBalance !== undefined
-                ? `${state.profile.pocketBalance.toLocaleString("fr-FR")} F`
-                : "Définir"}
+              {state.profile.pocketBalance !== undefined ? (
+                <AnimatedCounter value={state.profile.pocketBalance} />
+              ) : (
+                "Définir"
+              )}
             </span>
           </button>
 
-          {/* Streak Jours Maîtrisés */}
+          {/* Streak Jours Maîtrisés avec badge de palier */}
           <div
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium shadow-2xs transition-all ${
               streak.flameLevel >= 3
@@ -185,13 +216,46 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
               }`}
             />
             <span className="font-bold">{streak.streakDays} j</span>
-            <span className="text-[10px] text-[#8A8884]">maîtrisés</span>
+            <span className="text-[10px] text-[#8A8884]">
+              {streak.streakDays <= 1 ? "maîtrisé" : "maîtrisés"}
+            </span>
+            {streak.badgeName && streak.streakDays >= 7 && (
+              <span className="text-[10px] font-semibold text-[#8F6618]">
+                • {streak.badgeName}
+              </span>
+            )}
             {streak.streakDays >= 7 && (
               <Sparkles className="w-3 h-3 text-[#C9922E] fill-[#C9922E]" />
             )}
           </div>
         </div>
       </div>
+
+      {/* Mode « Paie reçue » (1.2 PRO) */}
+      {isPaydayPeriod && !isFocusMode && (
+        <div className="mx-5 mt-3 p-3 bg-white border border-[#C9922E]/50 rounded-[16px] shadow-xs flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-full bg-[#4A6B3F]/10 text-[#4A6B3F] shrink-0">
+              <Banknote className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#C9922E] block">
+                Période de paie
+              </span>
+              <p className="text-xs text-[#1F1A15] font-semibold">
+                Tu as reçu ton salaire ou ta bourse ?
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPaydayModal(true)}
+            className="px-3 py-1.5 bg-[#4A6B3F] hover:bg-[#3D5A33] text-white rounded-full text-xs font-semibold shrink-0 transition-all active:scale-95 shadow-2xs"
+          >
+            Mettre à jour
+          </button>
+        </div>
+      )}
 
       {/* Message du Grand Frère (P1 WAOUH) */}
       {!isFocusMode && (
@@ -251,7 +315,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           </div>
           <div className="text-right pl-2 shrink-0">
             <span className="text-[9px] text-[#8A8884] block">Prévu le {radar.lastDayOfMonth}</span>
-            <span
+            <div
               className={`font-fraunces text-sm font-bold ${
                 radar.status === "green"
                   ? "text-[#4A6B3F]"
@@ -260,8 +324,8 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                   : "text-[#A8453F]"
               }`}
             >
-              {formatFCFA(radar.projectedBalance)}
-            </span>
+              <AnimatedCounter value={radar.projectedBalance} />
+            </div>
           </div>
         </div>
       )}
@@ -312,20 +376,18 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           transition={{ duration: 0.4, delay: 0.1 }}
           className="my-1.5 flex items-baseline justify-center"
         >
-          <span
+          <div
             className={`font-fraunces text-5xl sm:text-6xl font-bold tracking-tight tab-num transition-colors ${
               state.profile.privateMode ? "filter blur-sm select-none" : ""
             }`}
             style={{ color: allowance.statusColor }}
           >
-            {allowance.dailyAllowance.toLocaleString("fr-FR")}
-          </span>
-          <span
-            className="font-fraunces text-2xl font-bold ml-1.5"
-            style={{ color: allowance.statusColor }}
-          >
-            F
-          </span>
+            <AnimatedCounter
+              value={allowance.dailyAllowance}
+              className="font-fraunces text-5xl sm:text-6xl font-bold"
+              color={allowance.statusColor}
+            />
+          </div>
         </motion.div>
 
         <p className="text-xs text-[#8A8884] font-medium">
@@ -345,13 +407,13 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           {state.profile.pocketBalance !== undefined ? (
             <span
               onClick={onSetPocketBalance}
-              className="text-[#55534F] cursor-pointer hover:underline"
+              className="text-[#55534F] cursor-pointer hover:underline inline-flex items-center gap-1 justify-center"
             >
-              Tu as{" "}
+              <span>Tu as</span>
               <strong className="text-[#1F1A15] font-semibold">
-                {formatFCFA(state.profile.pocketBalance)}
-              </strong>{" "}
-              en poche
+                <AnimatedCounter value={state.profile.pocketBalance} />
+              </strong>
+              <span>en poche</span>
             </span>
           ) : (
             <button
@@ -763,6 +825,84 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           )}
         </div>
       )}
+
+      {/* Modal 1.2 PRO : Mode Paie reçue */}
+      <AnimatePresence>
+        {showPaydayModal && (
+          <div
+            className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
+            onClick={() => setShowPaydayModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-[#FAF6EF] rounded-[20px] p-5 shadow-2xl border border-[#E8DDC9]"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-[#4A6B3F]/15 text-[#4A6B3F]">
+                    <Banknote className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-fraunces text-base font-bold text-[#1F1A15]">
+                      Mode Paie reçue
+                    </h3>
+                    <p className="text-[11px] text-[#8A8884]">
+                      Salaire, bourse ou aide familiale
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPaydayModal(false)}
+                  className="p-1 rounded-full text-[#8A8884] hover:bg-[#E8DDC9]/40"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-[#55534F] mb-3 leading-relaxed">
+                Tu as reçu ton argent ? Renseigne le montant reçu pour mettre à jour instantanément ton solde disponible et recalculer ton allocation quotidienne jusqu’à la fin du mois.
+              </p>
+
+              <form onSubmit={handlePaydaySubmit} className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-[#8A8884] uppercase tracking-wider block mb-1">
+                    Montant perçu en FCFA
+                  </label>
+                  <input
+                    type="number"
+                    autoFocus
+                    placeholder="Ex: 50000"
+                    value={paydayAmountInput}
+                    onChange={(e) => setPaydayAmountInput(e.target.value)}
+                    className="w-full p-3 bg-white rounded-xl border border-[#E8DDC9] focus:border-[#4A6B3F] text-xl font-bold font-fraunces text-[#1F1A15] outline-none"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={Number(paydayAmountInput) <= 0}
+                    className="flex-1 py-3 bg-[#4A6B3F] disabled:opacity-40 hover:bg-[#3D5A33] text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-98"
+                  >
+                    Mettre à jour mon solde
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPaydayModal(false)}
+                    className="px-4 py-3 bg-white text-[#55534F] rounded-xl text-xs font-medium border border-[#E8DDC9] hover:bg-[#FAF6EF]"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
