@@ -47,6 +47,8 @@ export interface Expense {
   timestamp: number; // epoch ms
   roundUpSaved?: number;
   targetGoalId?: string;
+  /** Solde débité au moment de l'enregistrement; 0 pour un rattrapage historique. */
+  pocketBalanceImpact?: number;
 }
 
 export interface Income {
@@ -135,6 +137,7 @@ export interface AppProfile {
   observationMode: boolean;
   observationStartTimestamp?: number;
   pocketBalance?: number; // Solde en poche réel
+  lastUsedCategoryId?: string;
   lastOpenedTimestamp: number;
   darkMode: boolean;
   privateMode: boolean;

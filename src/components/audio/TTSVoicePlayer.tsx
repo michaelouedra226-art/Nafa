@@ -287,7 +287,10 @@ export const TTSVoicePlayer: React.FC<TTSVoicePlayerProps> = ({
       type="button"
       onClick={handleSpeak}
       title={isPlaying ? "Arrêter la voix" : "Écouter avec NAFA"}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+      aria-label={isLoading ? "Chargement de la voix" : isPlaying ? "Arrêter la lecture audio" : label}
+      aria-pressed={isPlaying}
+      aria-busy={isLoading}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B5541F] focus-visible:ring-offset-2 ${
         isPlaying
           ? "bg-[#B5541F] text-[#FAF6EF] ring-2 ring-[#B5541F]/30"
           : "bg-[#E8DDC9]/50 hover:bg-[#E8DDC9] text-[#1F1A15]"

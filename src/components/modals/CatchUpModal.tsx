@@ -51,7 +51,7 @@ export const CatchUpModal: React.FC<CatchUpModalProps> = ({
   };
 
   const handleSaveAll = () => {
-    const validLines = lines.filter((l) => Number(l.amount) > 0);
+    const validLines = lines.filter((l) => Number.isSafeInteger(Number(l.amount)) && Number(l.amount) > 0);
     if (validLines.length === 0) return;
 
     const newExpenses: Omit<Expense, "id">[] = validLines.map((l) => ({
@@ -81,6 +81,9 @@ export const CatchUpModal: React.FC<CatchUpModalProps> = ({
               <p className="text-xs text-[#8A8884]">
                 Saisis plusieurs dépenses passées en une seule fois.
               </p>
+              <p className="text-[11px] text-[#4A6B3F] mt-1">
+                Ces lignes complètent l’historique; ton solde réel reste inchangé.
+              </p>
             </div>
             <button
               type="button"
@@ -101,6 +104,8 @@ export const CatchUpModal: React.FC<CatchUpModalProps> = ({
               <div className="flex items-center gap-2">
                 <input
                   type="number"
+                  min="1"
+                  step="1"
                   placeholder="Montant F"
                   value={line.amount}
                   onChange={(e) => updateLine(idx, "amount", e.target.value)}

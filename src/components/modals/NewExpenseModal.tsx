@@ -30,7 +30,9 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
 }) => {
   const [amountStr, setAmountStr] = useState<string>(defaultAmount ? defaultAmount.toString() : "");
   const [categoryId, setCategoryId] = useState<string>(
-    defaultCategory || categories[0]?.id || "cat_nourriture"
+    (defaultCategory && categories.some((category) => category.id === defaultCategory)
+      ? defaultCategory
+      : categories[0]?.id) || "cat_nourriture"
   );
   const [note, setNote] = useState<string>("");
   const [dateOption, setDateOption] = useState<"today" | "yesterday" | "custom">("today");
@@ -76,7 +78,7 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
   };
 
   const handleValidate = () => {
-    if (currentAmount <= 0) return;
+    if (!Number.isSafeInteger(currentAmount) || currentAmount <= 0) return;
     if (isInsufficient) return;
 
     setShowFlyAnim(true);
@@ -379,7 +381,7 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
           <motion.button
             whileTap={{ scale: 0.97 }}
             type="button"
-            disabled={currentAmount <= 0 || isInsufficient}
+            disabled={!Number.isSafeInteger(currentAmount) || currentAmount <= 0 || isInsufficient}
             onClick={handleValidate}
             className="w-full py-3.5 bg-[#B5541F] hover:bg-[#A04514] active:bg-[#8F3B0E] disabled:opacity-30 text-[#FAF6EF] rounded-full text-base font-medium shadow-sm transition-all"
           >
