@@ -140,6 +140,23 @@ export function computeDailyAllowance(state: AppState): DailyAllowanceResult {
   };
 }
 
+export function getCrossedGoalMilestone(
+  previousAmount: number,
+  currentAmount: number,
+  targetAmount: number,
+): 25 | 50 | 75 | undefined {
+  if (!Number.isFinite(previousAmount) || !Number.isFinite(currentAmount) ||
+    !Number.isFinite(targetAmount) || targetAmount <= 0 || currentAmount <= previousAmount) {
+    return undefined;
+  }
+  const previousProgress = (previousAmount / targetAmount) * 100;
+  const currentProgress = (currentAmount / targetAmount) * 100;
+  const crossed = ([25, 50, 75] as const).filter(
+    (milestone) => previousProgress < milestone && currentProgress >= milestone,
+  );
+  return crossed[crossed.length - 1];
+}
+
 export function formatFCFA(amount: number): string {
   const rounded = Math.round(amount);
   return `${rounded.toLocaleString("fr-FR")} F`;
@@ -193,9 +210,12 @@ export function computeObservationBudgetSuggestion(state: AppState): {
 
 export function calculateRoundUp(amount: number, unit: number = 100): { targetRounded: number; diff: number } {
   if (amount <= 0) return { targetRounded: 0, diff: 0 };
+  if (!Number.isSafeInteger(amount) || !Number.isSafeInteger(unit) || unit <= 0) {
+    return { targetRounded: 0, diff: 0 };
+  }
   const remainder = amount % unit;
   if (remainder === 0) {
-    return { targetRounded: amount + unit, diff: unit };
+    return { targetRounded: amount, diff: 0 };
   }
   const targetRounded = amount + (unit - remainder);
   const diff = targetRounded - amount;
@@ -484,7 +504,7 @@ export function computeMasteredDaysStreak(state: AppState): MasteredStreakResult
     if (dayTotal <= threshold) {
       streak++;
     } else {
-      // Dépassement budgétaire avéré ce jour-là : la série continue s'arrête
+      // La série d'équilibre s'arrête ici; le suivi reprend sans pénalité demain.
       break;
     }
   }
@@ -498,22 +518,22 @@ export function computeMasteredDaysStreak(state: AppState): MasteredStreakResult
 
   if (streak >= 30) {
     milestoneBadge = "gold_30";
-    badgeName = "Maître du Cauris (30j)";
-    message = "Un mois entier de maîtrise absolue. Tu inspires le respect.";
+    badgeName = "Un mois de constance";
+    message = "Un mois de suivi régulier : bravo pour cette constance.";
   } else if (streak >= 14) {
     milestoneBadge = "silver_14";
-    badgeName = "Discipline d'Acier (14j)";
-    message = "Deux semaines sans faux pas. La rigueur paie toujours.";
+    badgeName = "Deux semaines d'équilibre";
+    message = "Deux semaines de suivi régulier. Tes habitudes prennent forme.";
   } else if (streak >= 7) {
     milestoneBadge = "bronze_7";
     badgeName = "Cap des 7 jours";
-    message = "7 jours sans dépassement. Tu tiens le rythme. C’est ça la rigueur.";
+    message = "Une semaine d'équilibre. Avance à ton rythme.";
   } else if (streak >= 3) {
-    message = `Belle régularité sur ${streak} jours. Continue sur cette lancée.`;
+    message = `Belle régularité sur ${streak} jours. Continue à ton rythme.`;
   } else if (streak === 1 || streak === 2) {
-    message = "Journée sous contrôle. La discipline commence ici.";
+    message = "Tu suis ton budget, une étape à la fois.";
   } else {
-    message = "Nouveau départ aujourd'hui. Chaque franc compte.";
+    message = "Le suivi peut reprendre aujourd'hui, à ton rythme. Chaque franc compte.";
   }
 
   return {
@@ -553,22 +573,22 @@ export function generateGrandBrotherDailyMessage(state: AppState): string {
 
   if (nearGoal) {
     const pct = Math.round((nearGoal.currentAmount / nearGoal.targetAmount) * 100);
-    return `${greeting} Tu es à ${pct} % de ton objectif ${nearGoal.name}. Encore un dernier effort, la victoire est à portée de main !`;
+    return `${greeting} Ton objectif ${nearGoal.name} est à ${pct} %. Tu avances bien; poursuis quand cela te convient.`;
   }
 
   // 2. Priorité : streak remarquable (>= 7 jours)
   if (streak.streakDays >= 7) {
-    return `${greeting} ${streak.streakDays} jours consécutifs sans dépassement ! Tu tiens le rythme, c’est ça la vraie rigueur.`;
+    return `${greeting} ${streak.streakDays} jours de suivi régulier. Belle constance; continue à ton rythme.`;
   }
 
   // 3. Priorité : alerte rouge de fin de mois
   if (radar.status === "red") {
-    return `${greeting} Attention, à ce rythme la fin de mois risque d'être tendue. Priorise la nourriture et le transport, reporte le reste.`;
+    return `${greeting} La projection de fin de mois est serrée. Si tu le peux, réserve d'abord ton budget à la nourriture et au transport.`;
   }
 
   // 4. Priorité : streak naissant ou bonne gestion
   if (streak.streakDays >= 3) {
-    return `${greeting} T'as bien géré ces derniers jours. Garde ce rythme régulier, chaque franc préservé te protège.`;
+    return `${greeting} Tu as suivi ton budget ces derniers jours. Chaque économie aide; continue à ton rythme.`;
   }
 
   // 5. Rythme sain standard
@@ -576,7 +596,7 @@ export function generateGrandBrotherDailyMessage(state: AppState): string {
     return `${greeting} Il te reste ${formatFCFA(allowance.dailyAllowance)} par jour jusqu'à la fin du mois. ${allowance.humanMessage}`;
   }
 
-  return `${greeting} Sois vigilant aujourd'hui, observe bien chaque dépense avant de sortir la monnaie.`;
+  return `${greeting} Ton budget du jour est atteint. Si c'est possible, reporte une dépense non essentielle.`;
 }
 
 /**
@@ -619,4 +639,3 @@ export function simulateDeposit(
     canExecute: currentBalance >= amount && amount > 0,
   };
 }
-

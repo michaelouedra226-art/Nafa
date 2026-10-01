@@ -37,6 +37,7 @@ import {
 interface TodayScreenProps {
   state: AppState;
   onOpenNewExpense: (defaultCat?: string, defaultAmount?: number) => void;
+  onOpenNewIncome: () => void;
   onOpenCatchUp: () => void;
   onOpenSettings: () => void;
   onOpenFullHistory: () => void;
@@ -56,6 +57,7 @@ interface TodayScreenProps {
 export const TodayScreen: React.FC<TodayScreenProps> = ({
   state,
   onOpenNewExpense,
+  onOpenNewIncome,
   onOpenCatchUp,
   onOpenSettings,
   onOpenFullHistory,
@@ -107,9 +109,11 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
 
   // Détection Mode Paie reçue (Partie 1.2 PRO)
   const currentDay = now.getDate();
-  const grantDay = state.profile.incomeSources?.grantDay;
-  const isNearGrantDay = grantDay ? Math.abs(currentDay - grantDay) <= 2 : false;
-  const isPaydayPeriod = isNearGrantDay || currentDay >= 24 || currentDay <= 6;
+  const incomeSources = state.profile.incomeSources;
+  const grantDay = incomeSources?.grantDay;
+  const isNearGrantDay = Boolean(incomeSources?.hasGrant && grantDay && Math.abs(currentDay - grantDay) <= 2);
+  const isRegularJobPayPeriod = Boolean(incomeSources?.hasRegularJob && (currentDay >= 24 || currentDay <= 6));
+  const isPaydayPeriod = isNearGrantDay || isRegularJobPayPeriod;
   const [showPaydayModal, setShowPaydayModal] = useState(false);
   const [paydayAmountInput, setPaydayAmountInput] = useState<string>(
     (state.profile.incomeSources?.grantAmount ||
@@ -120,7 +124,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   const handlePaydaySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(paydayAmountInput);
-    if (amt <= 0) return;
+    if (!Number.isSafeInteger(amt) || amt <= 0) return;
     if (onReceivePayday) {
       onReceivePayday(amt, "Salaire / Bourse");
     } else {
@@ -180,7 +184,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           </div>
         </div>
 
-        {/* Ligne double : Solde disponible & Streak « Jours Maîtrisés » (P0 WAOUH) */}
+        {/* Ligne double : Solde disponible & jours d'équilibre */}
         <div className="flex items-center justify-between gap-2 mt-2">
           <button
             type="button"
@@ -190,7 +194,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           >
             <span className="w-2 h-2 rounded-full bg-[#4A6B3F] shrink-0" />
             <span className="text-[#55534F]">Solde :</span>
-            <span className="font-bold text-[#1F1A15] font-fraunces">
+            <span className={`font-bold text-[#1F1A15] font-fraunces ${state.profile.privateMode ? "filter blur-sm select-none" : ""}`}>
               {state.profile.pocketBalance !== undefined ? (
                 <AnimatedCounter value={state.profile.pocketBalance} />
               ) : (
@@ -208,7 +212,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 ? "bg-[#B5541F]/10 border-[#B5541F]/40 text-[#B5541F]"
                 : "bg-white border-[#E8DDC9] text-[#55534F]"
             }`}
-            title={streak.message || `${streak.streakDays} jours consécutifs sans dépassement`}
+            title={streak.message || `${streak.streakDays} jours de constance, à ton rythme`}
           >
             <Flame
               className={`w-3.5 h-3.5 ${
@@ -217,7 +221,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             />
             <span className="font-bold">{streak.streakDays} j</span>
             <span className="text-[10px] text-[#8A8884]">
-              {streak.streakDays <= 1 ? "maîtrisé" : "maîtrisés"}
+              de constance
             </span>
             {streak.badgeName && streak.streakDays >= 7 && (
               <span className="text-[10px] font-semibold text-[#8F6618]">
@@ -230,6 +234,148 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 4.3 Le Héros — Le Chiffre du Jour Animé */}
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="px-5 py-6 text-center"
+      >
+        <span className="text-xs uppercase font-medium tracking-wider text-[#8A8884]">
+          Reste à dépenser
+        </span>
+
+        {/* Chiffre très grand (54px) en Fraunces tabulaire */}
+        <motion.div
+          initial={{ y: 8, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="my-1.5 flex items-baseline justify-center"
+        >
+          <div
+            className={`font-fraunces text-5xl sm:text-6xl font-bold tracking-tight tab-num transition-colors ${
+              state.profile.privateMode ? "filter blur-sm select-none" : ""
+            }`}
+            style={{ color: allowance.statusColor }}
+          >
+            <AnimatedCounter
+              value={allowance.dailyAllowance}
+              className="font-fraunces text-5xl sm:text-6xl font-bold"
+              color={allowance.statusColor}
+            />
+          </div>
+        </motion.div>
+
+        <p className="text-xs text-[#8A8884] font-medium">
+          par jour jusqu'à la fin du mois
+        </p>
+
+        {/* Ligne courte et humaine */}
+        <p
+          className="text-xs font-semibold mt-2"
+          style={{ color: allowance.statusColor }}
+        >
+          {allowance.humanMessage}
+        </p>
+
+        {/* Solde en poche */}
+        <div className="mt-2 text-xs">
+          {state.profile.pocketBalance !== undefined ? (
+            <span
+              onClick={onSetPocketBalance}
+              className="text-[#55534F] cursor-pointer hover:underline inline-flex items-center gap-1 justify-center"
+            >
+              <span>Tu as</span>
+              <strong className={`text-[#1F1A15] font-semibold ${state.profile.privateMode ? "filter blur-sm select-none" : ""}`}>
+                <AnimatedCounter value={state.profile.pocketBalance} />
+              </strong>
+              <span>en poche</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onSetPocketBalance}
+              className="text-[#8A8884] hover:text-[#B5541F] underline text-[11px]"
+            >
+              Renseigner mon solde en poche
+            </button>
+          )}
+        </div>
+      </motion.div>
+
+      {/* 4.4 Barre de progression fine (3px) animée */}
+      <div className="px-5 mb-5">
+        <div className="w-full h-[3px] bg-[#E8DDC9] rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min(100, Math.round(allowance.progressRatio * 100))}%` }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="h-full rounded-full"
+            style={{
+              backgroundColor: allowance.statusColor,
+            }}
+          />
+        </div>
+      </div>
+
+
+      {/* Radar de fin de mois (P0 WAOUH) */}
+      {!isFocusMode && (
+        <div className="mx-5 mt-2.5 p-3 bg-white border border-[#E8DDC9] rounded-[16px] shadow-xs flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div
+              className={`p-2 rounded-full ${
+                radar.status === "green"
+                  ? "bg-[#4A6B3F]/10 text-[#4A6B3F]"
+                  : radar.status === "orange"
+                  ? "bg-[#C9922E]/10 text-[#C9922E]"
+                  : "bg-[#A8453F]/10 text-[#A8453F]"
+              }`}
+            >
+              <Compass className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#8A8884]">
+                  Radar fin de mois
+                </span>
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                    radar.status === "green"
+                      ? "bg-[#4A6B3F]/15 text-[#4A6B3F]"
+                      : radar.status === "orange"
+                      ? "bg-[#C9922E]/15 text-[#C9922E]"
+                      : "bg-[#A8453F]/15 text-[#A8453F]"
+                  }`}
+                >
+                  {radar.status === "green"
+                    ? "Cap serein"
+                    : radar.status === "orange"
+                    ? "Vigilance"
+                    : "Risque déficit"}
+                </span>
+              </div>
+              <p className="text-xs text-[#1F1A15] font-medium mt-0.5">{radar.shortPhrase}</p>
+            </div>
+          </div>
+          <div className="text-right pl-2 shrink-0">
+            <span className="text-[9px] text-[#8A8884] block">Prévu le {radar.lastDayOfMonth}</span>
+            <div
+              className={`font-fraunces text-sm font-bold ${state.profile.privateMode ? "filter blur-sm select-none" : ""} ${
+                radar.status === "green"
+                  ? "text-[#4A6B3F]"
+                  : radar.status === "orange"
+                  ? "text-[#C9922E]"
+                  : "text-[#A8453F]"
+              }`}
+            >
+              <AnimatedCounter value={radar.projectedBalance} />
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Mode « Paie reçue » (1.2 PRO) */}
       {isPaydayPeriod && !isFocusMode && (
@@ -274,62 +420,6 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         </div>
       )}
 
-      {/* Radar de fin de mois (P0 WAOUH) */}
-      {!isFocusMode && (
-        <div className="mx-5 mt-2.5 p-3 bg-white border border-[#E8DDC9] rounded-[16px] shadow-xs flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={`p-2 rounded-full ${
-                radar.status === "green"
-                  ? "bg-[#4A6B3F]/10 text-[#4A6B3F]"
-                  : radar.status === "orange"
-                  ? "bg-[#C9922E]/10 text-[#C9922E]"
-                  : "bg-[#A8453F]/10 text-[#A8453F]"
-              }`}
-            >
-              <Compass className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#8A8884]">
-                  Radar fin de mois
-                </span>
-                <span
-                  className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                    radar.status === "green"
-                      ? "bg-[#4A6B3F]/15 text-[#4A6B3F]"
-                      : radar.status === "orange"
-                      ? "bg-[#C9922E]/15 text-[#C9922E]"
-                      : "bg-[#A8453F]/15 text-[#A8453F]"
-                  }`}
-                >
-                  {radar.status === "green"
-                    ? "Cap serein"
-                    : radar.status === "orange"
-                    ? "Vigilance"
-                    : "Risque déficit"}
-                </span>
-              </div>
-              <p className="text-xs text-[#1F1A15] font-medium mt-0.5">{radar.shortPhrase}</p>
-            </div>
-          </div>
-          <div className="text-right pl-2 shrink-0">
-            <span className="text-[9px] text-[#8A8884] block">Prévu le {radar.lastDayOfMonth}</span>
-            <div
-              className={`font-fraunces text-sm font-bold ${
-                radar.status === "green"
-                  ? "text-[#4A6B3F]"
-                  : radar.status === "orange"
-                  ? "text-[#C9922E]"
-                  : "text-[#A8453F]"
-              }`}
-            >
-              <AnimatedCounter value={radar.projectedBalance} />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Bandeaux contextuels (Partie 4.8) */}
       {alerts.length > 0 && (
         <div className="px-5 pt-3 space-y-2">
@@ -358,90 +448,6 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         </div>
       )}
 
-      {/* 4.3 Le Héros — Le Chiffre du Jour Animé */}
-      <motion.div 
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        className="px-5 py-6 text-center"
-      >
-        <span className="text-xs uppercase font-medium tracking-wider text-[#8A8884]">
-          Reste à dépenser
-        </span>
-
-        {/* Chiffre très grand (54px) en Fraunces tabulaire */}
-        <motion.div 
-          initial={{ y: 8, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="my-1.5 flex items-baseline justify-center"
-        >
-          <div
-            className={`font-fraunces text-5xl sm:text-6xl font-bold tracking-tight tab-num transition-colors ${
-              state.profile.privateMode ? "filter blur-sm select-none" : ""
-            }`}
-            style={{ color: allowance.statusColor }}
-          >
-            <AnimatedCounter
-              value={allowance.dailyAllowance}
-              className="font-fraunces text-5xl sm:text-6xl font-bold"
-              color={allowance.statusColor}
-            />
-          </div>
-        </motion.div>
-
-        <p className="text-xs text-[#8A8884] font-medium">
-          par jour jusqu'à la fin du mois
-        </p>
-
-        {/* Ligne courte et humaine */}
-        <p
-          className="text-xs font-semibold mt-2"
-          style={{ color: allowance.statusColor }}
-        >
-          {allowance.humanMessage}
-        </p>
-
-        {/* Solde en poche */}
-        <div className="mt-2 text-xs">
-          {state.profile.pocketBalance !== undefined ? (
-            <span
-              onClick={onSetPocketBalance}
-              className="text-[#55534F] cursor-pointer hover:underline inline-flex items-center gap-1 justify-center"
-            >
-              <span>Tu as</span>
-              <strong className="text-[#1F1A15] font-semibold">
-                <AnimatedCounter value={state.profile.pocketBalance} />
-              </strong>
-              <span>en poche</span>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={onSetPocketBalance}
-              className="text-[#8A8884] hover:text-[#B5541F] underline text-[11px]"
-            >
-              Renseigner mon solde en poche
-            </button>
-          )}
-        </div>
-      </motion.div>
-
-      {/* 4.4 Barre de progression fine (3px) animée */}
-      <div className="px-5 mb-5">
-        <div className="w-full h-[3px] bg-[#E8DDC9] rounded-full overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${Math.min(100, Math.round(allowance.progressRatio * 100))}%` }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="h-full rounded-full"
-            style={{
-              backgroundColor: allowance.statusColor,
-            }}
-          />
-        </div>
-      </div>
-
       {/* 4.5 Les trois pastilles du jour (Nourriture, Transport, Sorties) animées */}
       <div className="px-5 mb-6">
         <div className="grid grid-cols-3 gap-2">
@@ -459,7 +465,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 Nourriture
               </span>
             </div>
-            <div className="font-fraunces text-sm font-bold text-[#1F1A15] tab-num">
+            <div className={`font-fraunces text-sm font-bold text-[#1F1A15] tab-num ${state.profile.privateMode ? "filter blur-sm select-none" : ""}`}>
               {catNourriture > 0 ? formatFCFA(catNourriture) : "0 F"}
             </div>
           </motion.button>
@@ -478,7 +484,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 Transport
               </span>
             </div>
-            <div className="font-fraunces text-sm font-bold text-[#1F1A15] tab-num">
+            <div className={`font-fraunces text-sm font-bold text-[#1F1A15] tab-num ${state.profile.privateMode ? "filter blur-sm select-none" : ""}`}>
               {catTransport > 0 ? formatFCFA(catTransport) : "0 F"}
             </div>
           </motion.button>
@@ -497,7 +503,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 Sorties
               </span>
             </div>
-            <div className="font-fraunces text-sm font-bold text-[#1F1A15] tab-num">
+            <div className={`font-fraunces text-sm font-bold text-[#1F1A15] tab-num ${state.profile.privateMode ? "filter blur-sm select-none" : ""}`}>
               {catSorties > 0 ? formatFCFA(catSorties) : "0 F"}
             </div>
           </motion.button>
@@ -510,17 +516,27 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         )}
       </div>
 
-      {/* 4.6 Bouton principal "Ajouter une dépense" avec animation vivante */}
-      <div className="px-5 mb-4">
+      {/* Actions principales : saisie rapide des deux sens de flux */}
+      <div className="px-5 mb-4 grid grid-cols-2 gap-2">
         <motion.button
           whileTap={{ scale: 0.96 }}
           whileHover={{ scale: 1.01 }}
           type="button"
           onClick={() => onOpenNewExpense()}
-          className="w-full py-4 bg-[#B5541F] hover:bg-[#A04514] active:bg-[#8F3B0E] text-[#FAF6EF] rounded-full text-base font-semibold shadow-md transition-all flex items-center justify-center gap-2"
+          className="w-full py-3.5 bg-[#B5541F] hover:bg-[#A04514] active:bg-[#8F3B0E] text-[#FAF6EF] rounded-full text-sm font-semibold shadow-md transition-all flex items-center justify-center gap-2"
         >
           <Plus className="w-5 h-5" />
           <span>Ajouter une dépense</span>
+        </motion.button>
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          whileHover={{ scale: 1.01 }}
+          type="button"
+          onClick={onOpenNewIncome}
+          className="w-full py-3.5 bg-[#4A6B3F] hover:bg-[#3D5933] active:bg-[#344B2C] text-white rounded-full text-sm font-semibold shadow-md transition-all flex items-center justify-center gap-2"
+        >
+          <Banknote className="w-5 h-5" />
+          <span>Ajouter un revenu</span>
         </motion.button>
       </div>
 
@@ -798,11 +814,11 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
 
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <span className="text-sm font-fraunces font-bold text-[#1F1A15] tab-num block">
+                        <span className={`text-sm font-fraunces font-bold text-[#1F1A15] tab-num block ${state.profile.privateMode ? "filter blur-sm select-none" : ""}`}>
                           {formatFCFA(exp.amount)}
                         </span>
                         {exp.roundUpSaved && (
-                          <span className="text-[10px] text-[#C9922E] flex items-center justify-end gap-0.5">
+                          <span className={`text-[10px] text-[#C9922E] flex items-center justify-end gap-0.5 ${state.profile.privateMode ? "filter blur-sm select-none" : ""}`}>
                             <CaurisIcon size={10} color="#C9922E" filled />
                             +{formatFCFA(exp.roundUpSaved)}
                           </span>
@@ -874,6 +890,8 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                   </label>
                   <input
                     type="number"
+                    min="1"
+                    step="1"
                     autoFocus
                     placeholder="Ex: 50000"
                     value={paydayAmountInput}
@@ -885,7 +903,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 <div className="flex gap-2 pt-1">
                   <button
                     type="submit"
-                    disabled={Number(paydayAmountInput) <= 0}
+                    disabled={!Number.isSafeInteger(Number(paydayAmountInput)) || Number(paydayAmountInput) <= 0}
                     className="flex-1 py-3 bg-[#4A6B3F] disabled:opacity-40 hover:bg-[#3D5A33] text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-98"
                   >
                     Mettre à jour mon solde

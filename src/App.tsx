@@ -1,24 +1,49 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AppProfile, AppState, Expense, Goal, Income, QuickTile, Debt, Tontine, Transaction, DailyChallenge } from "./types";
-import { loadAppState, saveAppState, resetAppState, DEFAULT_APP_STATE } from "./utils/storage";
+import { loadAppState, saveAppState, resetAppState, DEFAULT_APP_STATE, importStateFromJson } from "./utils/storage";
 import { TodayScreen } from "./components/screens/TodayScreen";
-import { GoalsScreen } from "./components/screens/GoalsScreen";
-import { CarnetScreen } from "./components/screens/CarnetScreen";
-import { HistoryScreen } from "./components/screens/HistoryScreen";
-import { OnboardingFlow } from "./components/onboarding/OnboardingFlow";
-import { NewExpenseModal } from "./components/modals/NewExpenseModal";
-import { NewIncomeModal } from "./components/modals/NewIncomeModal";
-import { CatchUpModal } from "./components/modals/CatchUpModal";
-import { SettingsModal } from "./components/modals/SettingsModal";
-import { PdfExportModal } from "./components/modals/PdfExportModal";
-import { CelebrationModal } from "./components/modals/CelebrationModal";
 import { CaurisIcon } from "./components/icons/CustomIcons";
 import { Sun, Target, BookOpen, Clock, Plus, Check } from "lucide-react";
 import { useBackButton } from "./hooks/useBackButton";
 import { useBatteryOptimization } from "./hooks/useBatteryOptimization";
 import confetti from "canvas-confetti";
 import { soundEffects, triggerHapticFeedback } from "./utils/hapticsAndAudio";
+import { addExpenseToState, removeExpenseFromState, removeIncomeFromState, restoreExpenseToState } from "./utils/ledger";
+import { getCrossedGoalMilestone } from "./utils/engine";
+
+const PdfExportModal = React.lazy(() =>
+  import("./components/modals/PdfExportModal").then((module) => ({ default: module.PdfExportModal })),
+);
+const GoalsScreen = React.lazy(() =>
+  import("./components/screens/GoalsScreen").then((module) => ({ default: module.GoalsScreen })),
+);
+const CarnetScreen = React.lazy(() =>
+  import("./components/screens/CarnetScreen").then((module) => ({ default: module.CarnetScreen })),
+);
+const HistoryScreen = React.lazy(() =>
+  import("./components/screens/HistoryScreen").then((module) => ({ default: module.HistoryScreen })),
+);
+const OnboardingFlow = React.lazy(() =>
+  import("./components/onboarding/OnboardingFlow").then((module) => ({ default: module.OnboardingFlow })),
+);
+const NewExpenseModal = React.lazy(() =>
+  import("./components/modals/NewExpenseModal").then((module) => ({ default: module.NewExpenseModal })),
+);
+const NewIncomeModal = React.lazy(() =>
+  import("./components/modals/NewIncomeModal").then((module) => ({ default: module.NewIncomeModal })),
+);
+const CatchUpModal = React.lazy(() =>
+  import("./components/modals/CatchUpModal").then((module) => ({ default: module.CatchUpModal })),
+);
+const SettingsModal = React.lazy(() =>
+  import("./components/modals/SettingsModal").then((module) => ({ default: module.SettingsModal })),
+);
+const CelebrationModal = React.lazy(() =>
+  import("./components/modals/CelebrationModal").then((module) => ({ default: module.CelebrationModal })),
+);
+const SCREEN_LOADING = <div role="status" className="p-6 text-center text-xs text-[#8A8884]">Chargement de l’écran…</div>;
+const MODAL_LOADING = <div role="status" className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 text-sm text-white">Ouverture…</div>;
 
 export function App() {
   const [state, setState] = useState<AppState>(() => loadAppState());
@@ -39,13 +64,34 @@ export function App() {
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storageUnavailable = useRef(false);
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, action?: { label: string; onClick: () => void }) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToastMessage(msg);
-    setTimeout(() => {
+    setToastAction(action || null);
+    toastTimer.current = setTimeout(() => {
       setToastMessage(null);
-    }, 2400);
+      setToastAction(null);
+      toastTimer.current = null;
+    }, action ? 5000 : 2400);
   };
+
+  const handleToastAction = () => {
+    const action = toastAction;
+    if (!action) return;
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = null;
+    setToastMessage(null);
+    setToastAction(null);
+    action.onClick();
+  };
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
 
   // 1. Optimisation batterie & extinction des activités en arrière-plan
   useBatteryOptimization();
@@ -116,7 +162,14 @@ export function App() {
   // Synchronisation débouncée avec localStorage
   useEffect(() => {
     const timer = setTimeout(() => {
-      saveAppState(state);
+      if (!saveAppState(state)) {
+        if (!storageUnavailable.current) {
+          showToast("Sauvegarde locale impossible : exporte une copie depuis Réglages.");
+        }
+        storageUnavailable.current = true;
+      } else {
+        storageUnavailable.current = false;
+      }
     }, 150);
     return () => clearTimeout(timer);
   }, [state]);
@@ -155,18 +208,24 @@ export function App() {
 
   // Traitement d'état importé depuis PDF
   const handlePdfParsedState = (parsedState: AppState) => {
-    setState({
-      ...parsedState,
-      profile: {
-        ...parsedState.profile,
-        onboardingCompleted: true,
-      },
-    });
-    showToast("Données importées depuis le PDF !");
+    try {
+      const validatedState = importStateFromJson(JSON.stringify(parsedState));
+      setState({
+        ...validatedState,
+        profile: { ...validatedState.profile, onboardingCompleted: true },
+      });
+      showToast("Données restaurées et vérifiées.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Cette sauvegarde n’est pas valide.");
+    }
   };
 
   // AJOUT D'UNE DÉPENSE
   const handleAddExpense = (newExpData: Omit<Expense, "id">, roundUpToGoalId?: string) => {
+    if (!Number.isSafeInteger(newExpData.amount) || newExpData.amount <= 0) {
+      showToast("Saisis un montant positif en FCFA entiers.");
+      return;
+    }
     const totalImpact = newExpData.amount + (newExpData.roundUpSaved || 0);
     const currentPocket = state.profile.pocketBalance;
 
@@ -179,6 +238,8 @@ export function App() {
     const newExpense: Expense = {
       ...newExpData,
       id: `exp_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      pocketBalanceImpact: currentPocket !== undefined ? totalImpact : 0,
+      targetGoalId: roundUpToGoalId || newExpData.targetGoalId,
     };
 
     const category = state.categories.find((c) => c.id === newExpense.categoryId);
@@ -186,83 +247,33 @@ export function App() {
     const targetGoal = roundUpToGoalId ? state.goals.find((g) => g.id === roundUpToGoalId) : undefined;
     const goalName = targetGoal ? targetGoal.name : "Épargne";
 
-    const newPocketBalance =
-      currentPocket !== undefined ? Math.max(0, currentPocket - totalImpact) : undefined;
-
-    setState((prev) => {
-      let updatedGoals = [...prev.goals];
-      let triggeredCelebration: Goal | null = null;
-
-      // Si arrondi versé vers un objectif
-      if (roundUpToGoalId && newExpData.roundUpSaved) {
-        updatedGoals = updatedGoals.map((g) => {
-          if (g.id === roundUpToGoalId) {
-            const updatedCurrent = g.currentAmount + newExpData.roundUpSaved!;
-            const isNowCompleted = updatedCurrent >= g.targetAmount;
-            const updatedGoal: Goal = {
-              ...g,
-              currentAmount: updatedCurrent,
-              completed: isNowCompleted,
-              completedDate: isNowCompleted ? new Date().toISOString().slice(0, 10) : g.completedDate,
-            };
-            if (isNowCompleted && !g.completed) {
-              triggeredCelebration = updatedGoal;
-            }
-            return updatedGoal;
-          }
-          return g;
-        });
+    const nextState = addExpenseToState(state, newExpense, roundUpToGoalId);
+    const completedGoal = nextState.goals.find(
+      (goal) => goal.id === roundUpToGoalId && goal.completed && !state.goals.find((old) => old.id === goal.id)?.completed,
+    );
+    setState(nextState);
+    if (completedGoal) setCelebrationGoal(completedGoal);
+    triggerHapticFeedback([20]);
+    const newPocketBalance = nextState.profile.pocketBalance;
+    const undoAddedExpense = () => {
+      setState((prev) => removeExpenseFromState(prev, newExpense.id));
+      if (completedGoal) {
+        setCelebrationGoal((current) => current?.id === completedGoal.id ? null : current);
       }
-
-      if (triggeredCelebration) {
-        setCelebrationGoal(triggeredCelebration);
-      }
-
-      // Journalisation des transactions unifiées
-      const newTransactions: Transaction[] = [
-        {
-          id: `tx_exp_${newExpense.id}`,
-          type: "expense",
-          amount: newExpense.amount,
-          direction: "out",
-          categoryId: newExpense.categoryId,
-          label: newExpense.label || catName,
-          timestamp: newExpense.timestamp,
-        },
-      ];
-
-      if (newExpense.roundUpSaved && newExpense.roundUpSaved > 0) {
-        newTransactions.push({
-          id: `tx_rup_${newExpense.id}`,
-          type: "round_up",
-          amount: newExpense.roundUpSaved,
-          direction: "out",
-          goalId: roundUpToGoalId,
-          label: `Arrondi vers « ${goalName} »`,
-          timestamp: newExpense.timestamp,
-          relatedExpenseId: newExpense.id,
-        });
-      }
-
-      return {
-        ...prev,
-        profile: {
-          ...prev.profile,
-          pocketBalance: newPocketBalance,
-        },
-        expenses: [newExpense, ...prev.expenses],
-        goals: updatedGoals,
-        transactions: [...newTransactions, ...(prev.transactions || [])],
-      };
-    });
+      showToast("Dépense annulée · solde et épargne rétablis.");
+    };
 
     const soldeStr = newPocketBalance !== undefined ? ` · Solde : ${newPocketBalance.toLocaleString("fr-FR")} F` : "";
     if (newExpense.roundUpSaved && newExpense.roundUpSaved > 0) {
       showToast(
-        `−${newExpense.amount.toLocaleString("fr-FR")} F (${catName}) · +${newExpense.roundUpSaved.toLocaleString("fr-FR")} F vers « ${goalName} »${soldeStr}`
+        `−${newExpense.amount.toLocaleString("fr-FR")} F (${catName}) · +${newExpense.roundUpSaved.toLocaleString("fr-FR")} F vers « ${goalName} »${soldeStr}`,
+        { label: "Annuler", onClick: undoAddedExpense },
       );
     } else {
-      showToast(`−${newExpense.amount.toLocaleString("fr-FR")} F (${catName})${soldeStr}`);
+      showToast(`−${newExpense.amount.toLocaleString("fr-FR")} F (${catName})${soldeStr}`, {
+        label: "Annuler",
+        onClick: undoAddedExpense,
+      });
     }
   };
 
@@ -271,6 +282,15 @@ export function App() {
     newIncData: Omit<Income, "id">,
     saveToGoal?: { goalId: string; amount: number }
   ) => {
+    if (!Number.isSafeInteger(newIncData.amount) || newIncData.amount <= 0) {
+      showToast("Saisis un revenu positif en FCFA entiers.");
+      return;
+    }
+    if (saveToGoal && (!Number.isSafeInteger(saveToGoal.amount) || saveToGoal.amount < 0 || saveToGoal.amount > newIncData.amount)) {
+      showToast("La part épargnée doit être comprise entre 0 et le revenu reçu.");
+      return;
+    }
+
     const newIncome: Income = {
       ...newIncData,
       id: `inc_${Date.now()}`,
@@ -282,6 +302,13 @@ export function App() {
       currentPocket !== undefined
         ? currentPocket + newIncome.amount - savedPart
         : newIncome.amount - savedPart;
+    const incomeTransactionId = `tx_inc_${newIncome.id}`;
+    const goalTransactionId = saveToGoal && savedPart > 0 ? `tx_gldep_${Date.now()}` : undefined;
+    const goalBeforeIncome = saveToGoal ? state.goals.find((goal) => goal.id === saveToGoal.goalId) : undefined;
+    const completedGoalByIncome = Boolean(
+      goalBeforeIncome && saveToGoal && !goalBeforeIncome.completed &&
+      goalBeforeIncome.currentAmount + savedPart >= goalBeforeIncome.targetAmount,
+    );
 
     setState((prev) => {
       let updatedGoals = [...prev.goals];
@@ -313,7 +340,7 @@ export function App() {
 
       const newTransactions: Transaction[] = [
         {
-          id: `tx_inc_${newIncome.id}`,
+          id: incomeTransactionId,
           type: "income",
           amount: newIncome.amount,
           direction: "in",
@@ -325,7 +352,7 @@ export function App() {
       if (saveToGoal && saveToGoal.amount > 0) {
         const goal = prev.goals.find((g) => g.id === saveToGoal.goalId);
         newTransactions.push({
-          id: `tx_gldep_${Date.now()}`,
+          id: goalTransactionId || `tx_gldep_${Date.now()}`,
           type: "goal_deposit",
           amount: saveToGoal.amount,
           direction: "out",
@@ -347,12 +374,35 @@ export function App() {
       };
     });
 
-    showToast(`+${newIncome.amount.toLocaleString("fr-FR")} F · Solde disponible : ${newPocketBalance.toLocaleString("fr-FR")} F`);
+    const undoAddedIncome = () => {
+      setState((prev) => removeIncomeFromState(
+        prev,
+        newIncome.id,
+        newIncome.amount - savedPart,
+        currentPocket !== undefined,
+        saveToGoal?.goalId,
+        savedPart,
+        goalTransactionId ? [goalTransactionId] : [],
+      ));
+      if (completedGoalByIncome && saveToGoal) {
+        setCelebrationGoal((current) => current?.id === saveToGoal.goalId ? null : current);
+      }
+      showToast("Revenu annulé · solde et épargne rétablis.");
+    };
+    showToast(`+${newIncome.amount.toLocaleString("fr-FR")} F · Solde disponible : ${newPocketBalance.toLocaleString("fr-FR")} F`, {
+      label: "Annuler",
+      onClick: undoAddedIncome,
+    });
   };
 
   // MODE PAIE REÇUE (1.2 PRO)
   const handleReceivePayday = (amount: number, label: string = "Salaire / Bourse") => {
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      showToast("Saisis un montant positif en FCFA entiers.");
+      return;
+    }
     const prevBal = state.profile.pocketBalance || 0;
+    const pocketWasDefined = state.profile.pocketBalance !== undefined;
     const newBal = prevBal + amount;
     const newInc: Income = {
       id: `inc_payday_${Date.now()}`,
@@ -389,7 +439,14 @@ export function App() {
       colors: ["#4A6B3F", "#C9922E", "#B5541F"],
     });
 
-    showToast(`+${amount.toLocaleString("fr-FR")} F enregistrés · Solde en poche : ${newBal.toLocaleString("fr-FR")} F`);
+    const undoPaydayIncome = () => {
+      setState((prev) => removeIncomeFromState(prev, newInc.id, amount, pocketWasDefined));
+      showToast("Revenu annulé · solde et journal rétablis.");
+    };
+    showToast(`+${amount.toLocaleString("fr-FR")} F enregistrés · Solde en poche : ${newBal.toLocaleString("fr-FR")} F`, {
+      label: "Annuler",
+      onClick: undoPaydayIncome,
+    });
   };
 
   // RATTRAPAGE DE DÉPENSES GROUPÉES
@@ -397,6 +454,8 @@ export function App() {
     const created: Expense[] = batch.map((item, idx) => ({
       ...item,
       id: `exp_batch_${Date.now()}_${idx}`,
+      // Une saisie rétroactive complète le journal, sans débiter un solde réel déjà actualisé.
+      pocketBalanceImpact: 0,
     }));
 
     const batchTransactions: Transaction[] = created.map((exp) => ({
@@ -415,43 +474,40 @@ export function App() {
       transactions: [...batchTransactions, ...(prev.transactions || [])],
     }));
 
-    showToast(`${created.length} dépenses rattrapées`);
+    showToast(`${created.length} dépenses ajoutées au journal · solde inchangé`);
   };
 
   // SUPPRESSION DE DÉPENSE
   const handleDeleteExpense = (id: string) => {
-    setState((prev) => ({
-      ...prev,
-      expenses: prev.expenses.filter((e) => e.id !== id),
-      transactions: (prev.transactions || []).filter(
-        (t) => t.id !== `tx_exp_${id}` && t.relatedExpenseId !== id
-      ),
-    }));
-    showToast("Dépense retirée");
+    const removedExpense = state.expenses.find((expense) => expense.id === id);
+    if (!removedExpense) return;
+    const removedTransactions = (state.transactions || []).filter(
+      (transaction) => transaction.id === `tx_exp_${id}` || transaction.relatedExpenseId === id,
+    );
+    const restoreDeletedExpense = () => {
+      setState((prev) => restoreExpenseToState(prev, removedExpense, removedTransactions));
+      showToast("Suppression annulée", { label: "Rétablir", onClick: deleteAgain });
+    };
+    const deleteAgain = () => {
+      setState((prev) => removeExpenseFromState(prev, id));
+      showToast("Suppression rétablie", { label: "Annuler", onClick: restoreDeletedExpense });
+    };
+    setState((prev) => removeExpenseFromState(prev, id));
+    showToast("Dépense supprimée", {
+      label: "Annuler",
+      onClick: restoreDeletedExpense,
+    });
   };
 
   // DUPLICATION DE DÉPENSE
   const handleDuplicateExpense = (expense: Expense) => {
-    const copy: Expense = {
-      ...expense,
-      id: `exp_${Date.now()}`,
+    handleAddExpense({
+      amount: expense.amount,
+      categoryId: expense.categoryId,
+      label: expense.label,
       timestamp: Date.now(),
-    };
-    const txCopy: Transaction = {
-      id: `tx_exp_${copy.id}`,
-      type: "expense",
-      amount: copy.amount,
-      direction: "out",
-      categoryId: copy.categoryId,
-      label: copy.label,
-      timestamp: copy.timestamp,
-    };
-    setState((prev) => ({
-      ...prev,
-      expenses: [copy, ...prev.expenses],
-      transactions: [txCopy, ...(prev.transactions || [])],
-    }));
-    showToast("Dépense dupliquée");
+      // La copie ne recrée pas l'arrondi-épargne de la transaction d'origine.
+    });
   };
 
   // TUILE RAPIDE
@@ -466,6 +522,10 @@ export function App() {
 
   // DÉPÔT VERS OBJECTIF
   const handleAddAmountToGoal = (goalId: string, amount: number) => {
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      showToast("Saisis un montant positif en FCFA entiers.");
+      return;
+    }
     const currentPocket = state.profile.pocketBalance;
 
     // Règle de protection : blocage si solde insuffisant
@@ -477,6 +537,10 @@ export function App() {
     const targetGoal = state.goals.find((g) => g.id === goalId);
     const goalName = targetGoal ? targetGoal.name : "Projet";
     const newPocketBalance = currentPocket !== undefined ? Math.max(0, currentPocket - amount) : undefined;
+    const projectedAmount = (targetGoal?.currentAmount || 0) + amount;
+    const milestone = targetGoal && projectedAmount < targetGoal.targetAmount
+      ? getCrossedGoalMilestone(targetGoal.currentAmount, projectedAmount, targetGoal.targetAmount)
+      : undefined;
 
     setState((prev) => {
       let triggeredCelebration: Goal | null = null;
@@ -524,7 +588,9 @@ export function App() {
     });
 
     const soldeStr = newPocketBalance !== undefined ? ` · Solde : ${newPocketBalance.toLocaleString("fr-FR")} F` : "";
-    showToast(`−${amount.toLocaleString("fr-FR")} F vers « ${goalName} »${soldeStr}`);
+    if (milestone) triggerHapticFeedback([18]);
+    const milestoneText = milestone ? ` · Étape ${milestone} % atteinte` : "";
+    showToast(`−${amount.toLocaleString("fr-FR")} F vers « ${goalName} »${soldeStr}${milestoneText}`);
   };
 
   // CRÉATION D'OBJECTIF
@@ -768,18 +834,20 @@ export function App() {
   if (!state.profile.onboardingCompleted) {
     return (
       <div className={isDark ? "dark bg-[#17130F] text-[#FAF6EF]" : "bg-[#FAF6EF] text-[#1F1A15]"}>
-        <OnboardingFlow
-          onComplete={handleCompleteOnboarding}
-          onImportFromPdf={handlePdfParsedState}
-          onRestoreJson={(jsonStr) => {
-            try {
-              const parsed = JSON.parse(jsonStr);
-              handlePdfParsedState(parsed);
-            } catch {
-              showToast("Fichier de sauvegarde invalide");
-            }
-          }}
-        />
+        <Suspense fallback={SCREEN_LOADING}>
+          <OnboardingFlow
+            onComplete={handleCompleteOnboarding}
+            onImportFromPdf={handlePdfParsedState}
+            onRestoreJson={(jsonStr) => {
+              try {
+                const parsed = JSON.parse(jsonStr);
+                handlePdfParsedState(parsed);
+              } catch {
+                showToast("Fichier de sauvegarde invalide");
+              }
+            }}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -800,7 +868,10 @@ export function App() {
         {/* Toast flottant discret */}
         {toastMessage && (
           <div
-            className={`fixed left-1/2 -translate-x-1/2 z-70 flex items-center gap-2 px-4 py-2.5 bg-[#1F1A15]/95 text-[#FAF6EF] border border-[#E8DDC9]/20 rounded-full text-xs font-medium shadow-2xl backdrop-blur-sm pointer-events-none transition-all animate-fade-in ${
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className={`fixed left-1/2 -translate-x-1/2 z-70 flex items-center gap-2 px-4 py-2.5 bg-[#1F1A15]/95 text-[#FAF6EF] border border-[#E8DDC9]/20 rounded-full text-xs font-medium shadow-2xl backdrop-blur-sm ${toastAction ? "pointer-events-auto" : "pointer-events-none"} transition-all animate-fade-in ${
               toastMessage.includes("quitter") || toastMessage.includes("Fermeture")
                 ? "bottom-24"
                 : "top-4"
@@ -812,6 +883,16 @@ export function App() {
               <Check className="w-3.5 h-3.5 text-[#4A6B3F] shrink-0" />
             )}
             <span>{toastMessage}</span>
+            {toastAction && (
+              <button
+                type="button"
+                onClick={handleToastAction}
+                className="ml-1 font-bold text-[#E6B95C] underline underline-offset-2"
+                aria-label={`${toastAction.label} la dernière opération`}
+              >
+                {toastAction.label}
+              </button>
+            )}
           </div>
         )}
 
@@ -826,6 +907,7 @@ export function App() {
               transition={{ duration: 0.18, ease: "easeOut" }}
               className="min-h-full"
             >
+              <Suspense fallback={SCREEN_LOADING}>
               {activeTab === "today" && (
                 <TodayScreen
                   state={state}
@@ -834,6 +916,7 @@ export function App() {
                     setExpenseDefaultAmount(amount);
                     setShowNewExpense(true);
                   }}
+                  onOpenNewIncome={() => setShowNewIncome(true)}
                   onOpenCatchUp={() => setShowCatchUp(true)}
                   onOpenSettings={() => setShowSettings(true)}
                   onOpenFullHistory={() => setActiveTab("history")}
@@ -887,6 +970,7 @@ export function App() {
                   }}
                 />
               )}
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </div>
@@ -990,6 +1074,7 @@ export function App() {
         </nav>
 
         {/* MODAL : NOUVELLE DÉPENSE (Partie 8.1) */}
+        <Suspense fallback={MODAL_LOADING}>
         {showNewExpense && (
           <NewExpenseModal
             categories={state.categories}
@@ -997,7 +1082,7 @@ export function App() {
             smallestDenomination={state.profile.smallestDenomination}
             roundUpSavingsEnabled={state.profile.roundUpSavingsEnabled}
             pocketBalance={state.profile.pocketBalance}
-            defaultCategory={expenseDefaultCat}
+            defaultCategory={expenseDefaultCat || state.profile.lastUsedCategoryId}
             defaultAmount={expenseDefaultAmount}
             onClose={() => {
               setShowNewExpense(false);
@@ -1040,10 +1125,7 @@ export function App() {
 
         {/* MODAL : EXPORT PDF & ATTESTATION A4 (Partie 15) */}
         {showPdfModal && (
-          <PdfExportModal
-            state={state}
-            onClose={() => setShowPdfModal(false)}
-          />
+          <PdfExportModal state={state} onClose={() => setShowPdfModal(false)} />
         )}
 
         {/* MODAL : CÉLÉBRATION DE PROJET ATTEINT (Partie 11) */}
@@ -1057,6 +1139,7 @@ export function App() {
             }}
           />
         )}
+        </Suspense>
 
         {/* MODAL : DÉFINIR SOLDE EN POCHE */}
         {showSetPocketModal && (
@@ -1074,6 +1157,8 @@ export function App() {
 
               <input
                 type="number"
+                min="0"
+                step="1"
                 autoFocus
                 value={tempPocketVal}
                 onChange={(e) => setTempPocketVal(e.target.value)}
@@ -1085,7 +1170,11 @@ export function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    const newBal = tempPocketVal ? Number(tempPocketVal) : undefined;
+                    const newBal = tempPocketVal.trim() ? Number(tempPocketVal) : undefined;
+                    if (newBal !== undefined && (!Number.isSafeInteger(newBal) || newBal < 0)) {
+                      showToast("Le solde doit être un montant positif en FCFA entiers, ou zéro.");
+                      return;
+                    }
                     const prevBal = state.profile.pocketBalance || 0;
                     if (newBal !== undefined) {
                       const diff = newBal - prevBal;

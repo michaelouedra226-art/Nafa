@@ -1,77 +1,80 @@
 # NAFA — Chaque franc compte
 
-Application web moderne de gestion budgétaire et d'épargne conçue pour les étudiants et jeunes actifs burkinabè (FCFA).
+NAFA est un compagnon de budget et d’épargne pour étudiants et jeunes actifs burkinabè, avec une comptabilité en FCFA.
 
 ## Prérequis
 
-- **Node.js** : version 20 ou supérieure (`node -v`)
-- **npm** : version 9 ou supérieure (`npm -v`)
+- **Node.js** : 20 ou supérieur
+- **npm** : 9 ou supérieur
+- Pour Android : Java 21 et Android SDK (ou GitHub Actions)
 
-## Installation & Démarrage local
+## Installation et démarrage local
 
-1. **Cloner le dépôt :**
-   ```bash
-   git clone <URL_DU_DEPOT_GITHUB>
-   cd nafa
-   ```
+```bash
+npm ci
+cp .env.example .env
+# Facultatif : définir GEMINI_API_KEY pour la synthèse vocale avancée
+npm run dev
+```
 
-2. **Installer les dépendances :**
-   ```bash
-   npm ci
-   ```
+L’application est disponible sur `http://localhost:3000`. Sans clé Gemini, le lecteur audio conserve son mécanisme de repli vers la voix de l’appareil.
 
-3. **Configurer l'environnement :**
-   ```bash
-   cp .env.example .env
-   # Optionnel : définir GEMINI_API_KEY pour la synthèse vocale avancée
-   ```
-
-4. **Lancer le serveur de développement :**
-   ```bash
-   npm run dev
-   ```
-   L'application est disponible sur `http://localhost:3000`.
-
-## Scripts de compilation & vérification
+## Vérification et compilation
 
 | Commande | Description |
 |---|---|
-| `npm run lint` | Validation stricte des types TypeScript via `tsc --noEmit` |
-| `npm run build` | Compilation complète de production (Client Vite SPA + Serveur Express bundlé) |
-| `npm run build:client` | Compilation uniquement de l'interface client statique (`dist/`) |
-| `npm run start` | Démarrage du serveur de production compilé (`node dist/server.cjs`) |
-| `npm run preview` | Prévisualisation du build Vite statique |
+| `npm test` | Tests unitaires de l’arrondi FCFA, du registre et des imports JSON |
+| `npm run lint` | Vérification des types TypeScript (`tsc --noEmit`) |
+| `npm run build` | Compilation de l’interface Vite et du serveur Express |
+| `npm run build:client` | Compilation de l’interface statique (`dist/`) |
+| `npm run start` | Démarrage du serveur compilé |
+| `npm run preview` | Prévisualisation locale du build Vite |
 
-## Intégration Continue & Compilation APK (GitHub Actions)
+## Données et confidentialité
 
-Le dépôt intègre un workflow CI/CD complet sous `.github/workflows/` :
+Les dépenses, revenus, objectifs et sauvegardes sont conservés localement sur l’appareil. L’option **Audio** transmet le texte lu — qui peut inclure le prénom et le budget quotidien — au service de synthèse vocale pour produire la voix. Aucun appel audio n’est déclenché sans action de l’utilisateur. Le mode discret floute les principaux montants visibles sur l’écran d’accueil.
 
-### 1. `build-apk.yml` (Compilation & Publication APK Android)
-- **Déclenchement automatique** : À chaque `push` sur les branches `main` ou `master`, à la création d'un tag (`v*`), ou manuellement via **GitHub > Actions > Build Android APK > Run workflow**.
-- **Environnement configuré** : Java JDK 21 (Temurin), Android SDK Tools (API 36 & 35), licences Android automatiquement acceptées, Gradle 8.14.3.
-- **Artefacts générés** :
-  - `NAFA-debug.apk` (recommandé pour test et installation directe immédiate sur tout smartphone Android).
-  - `NAFA-release.apk` (compilé avec signature debug pour permettre l'installation sans bloquage de certificat).
+Une sauvegarde JSON peut être exportée depuis Réglages. L’import valide la structure et les montants avant de remplacer les données; les imports de plus de 10 Mo sont refusés. Conserve une copie séparée de l’appareil.
 
-### 2. Liens directs de téléchargement des APKs
+Lors du passage au stockage local v6, la clé v5 existante n’est pas supprimée : elle reste disponible sur l’appareil comme copie de récupération. Cette copie locale ne remplace pas une sauvegarde JSON exportée hors de l’appareil.
 
-Dès que le workflow s'exécute sur votre dépôt GitHub, les APKs sont immédiatement accessibles via deux canaux :
+## GitHub Actions
 
-1. **Lien direct public GitHub Releases (sans connexion requise) :**
-   - **APK Debug (Direct)** : `https://github.com/<UTILISATEUR>/<DEPOT>/releases/latest/download/NAFA-debug.apk`
-   - **APK Release (Direct)** : `https://github.com/<UTILISATEUR>/<DEPOT>/releases/latest/download/NAFA-release.apk`
-   *(Remplacez `<UTILISATEUR>/<DEPOT>` par le nom de votre compte GitHub et de votre dépôt)*
+### Vérification CI
 
-2. **Depuis l'onglet Actions :**
-   - Rendez-vous sur votre dépôt GitHub : `https://github.com/<UTILISATEUR>/<DEPOT>/actions`
-   - Cliquez sur la dernière exécution **Build Android APK**
-   - Descendez à la section **Artifacts** et cliquez sur **nafa-android-apks** pour télécharger l'archive zip contenant les APKs.
+`.github/workflows/ci.yml` s’exécute sur les pushes de branche, les pull requests vers `main`/`master` et à la demande. Elle installe exactement le lockfile avec `npm ci`, puis exécute les tests, le contrôle TypeScript et le build.
 
-## Structure du projet
+### APK Android
 
-- `src/` : Code source React 19 + Tailwind CSS 4 + TypeScript
-  - `components/` : Écrans (Aujourd'hui, Objectifs, Carnet, Mémoire, Réglages) et modales (saisie, claviers, export)
-  - `utils/` : Moteur de calcul budgétaire NAFA, persistance locale (`localStorage`), export PDF / JSON
-  - `types.ts` : Modèle de données typé (dépenses, revenus, objectifs, dettes, tontines)
-- `server.ts` : Backend Express (API REST, synthèse vocale Gemini TTS, service statique Vite)
-- `.github/workflows/` : Configurations d'automatisation CI/CD pour GitHub
+`.github/workflows/build-apk.yml` produit un APK debug sur les pushes vers `main`/`master`. Les exécutions manuelles permettent aussi de choisir `debug`, `release` ou `both`. Les APK sont déposés comme artefacts temporaires de l’exécution Actions (rétention de 30 jours); ils ne sont plus publiés automatiquement dans une GitHub Release.
+
+Pour produire un **APK release signé**, configure dans les secrets du dépôt :
+
+- `NAFA_ANDROID_KEYSTORE_BASE64` — keystore encodé en Base64
+- `NAFA_ANDROID_KEY_ALIAS`
+- `NAFA_ANDROID_STORE_PASSWORD`
+- `NAFA_ANDROID_KEY_PASSWORD`
+
+Les secrets de signature ne doivent jamais être ajoutés au dépôt. En leur absence, le workflow refuse un build release; le build debug reste disponible.
+
+### GitHub Pages
+
+Le workflow Pages est manuel pour éviter une publication publique avant configuration explicite. Avant de le lancer, sélectionne **Settings → Pages → Build and deployment → GitHub Actions** sur GitHub, puis lance « Déploiement GitHub Pages » depuis l’onglet Actions.
+
+## Fonctionnalités
+
+- Tableau de bord budget du jour, solde réel, radar de fin de mois et raccourcis
+- Saisie rapide des dépenses et revenus, annulation temporaire d’une saisie et restauration d’une suppression
+- Objectifs d’épargne, progression par étapes, arrondis, dettes, tontines et rattrapage historique
+- Export PDF, sauvegarde/restauration JSON et mode discret
+- Animations compatibles avec la préférence système « Réduire les animations »
+- Langue française complète; Mooré, Dioula et Fulfuldé sont annoncés comme « bientôt » et ne sont pas présentés comme déjà traduits
+
+## Structure
+
+- `src/components/` : écrans et modales React
+- `src/utils/engine.ts` : calculs budgétaires et arrondis FCFA
+- `src/utils/ledger.ts` : transitions testables du registre dépenses/solde/objectifs
+- `src/utils/storage.ts` : persistance locale et import/export de sauvegarde
+- `server.ts` : service Express pour audio Gemini, avec validation de requêtes et limitation de débit
+- `.github/workflows/` : vérification CI, build Android et déploiement manuel Pages

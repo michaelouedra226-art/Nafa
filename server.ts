@@ -1,4 +1,5 @@
 import express from "express";
+import type { NextFunction, Request, Response } from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
@@ -6,9 +7,35 @@ import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT ?? 3000);
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65_535) {
+  throw new Error("La variable PORT doit être un entier compris entre 1 et 65535.");
+}
 
 let aiClient: GoogleGenAI | null = null;
+const ttsRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function limitTtsRequests(req: Request, res: Response, next: NextFunction) {
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || "unknown";
+  const current = ttsRateBuckets.get(key);
+  if (current && current.resetAt > now) {
+    if (current.count >= 20) {
+      res.setHeader("Retry-After", Math.ceil((current.resetAt - now) / 1000));
+      return res.status(429).json({ error: "Trop de demandes audio. Réessaie dans une minute." });
+    }
+    current.count += 1;
+  } else {
+    ttsRateBuckets.set(key, { count: 1, resetAt: now + 60_000 });
+  }
+
+  if (ttsRateBuckets.size > 2_000) {
+    for (const [bucketKey, bucket] of ttsRateBuckets) {
+      if (bucket.resetAt <= now) ttsRateBuckets.delete(bucketKey);
+    }
+  }
+  next();
+}
 function getAIClient(): GoogleGenAI | null {
   if (!aiClient && process.env.GEMINI_API_KEY) {
     aiClient = new GoogleGenAI({
@@ -47,19 +74,28 @@ function pcmToWav(pcmBase64: string, sampleRate = 24000, numChannels = 1, bitsPe
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: "5mb" }));
+  app.use(express.json({ limit: "16kb" }));
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("X-Frame-Options", "DENY");
+    next();
+  });
 
   // Health check
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", app: "NAFA", version: "4.0.0" });
+    res.json({ status: "ok", app: "NAFA", version: "1.1.0" });
   });
 
   // TTS endpoint using gemini-3.1-flash-tts-preview
-  app.post("/api/tts", async (req, res) => {
+  app.post("/api/tts", limitTtsRequests, async (req, res) => {
     try {
       const { text, voiceName } = req.body;
-      if (!text || typeof text !== "string") {
-        return res.status(400).json({ error: "Texte requis pour la synthèse vocale" });
+      if (typeof text !== "string" || !text.trim() || text.length > 600) {
+        return res.status(400).json({ error: "Le texte audio doit contenir entre 1 et 600 caractères." });
+      }
+      if (voiceName !== undefined && voiceName !== "Puck") {
+        return res.status(400).json({ error: "Voix audio non autorisée." });
       }
 
       const ai = getAIClient();
@@ -114,7 +150,7 @@ async function startServer() {
     } catch (error: any) {
       console.error("Erreur TTS:", error);
       return res.status(500).json({
-        error: error.message || "Erreur de synthèse vocale",
+        error: "La synthèse vocale a échoué. Réessaie ou utilise la voix de ton appareil.",
         fallback: true,
       });
     }

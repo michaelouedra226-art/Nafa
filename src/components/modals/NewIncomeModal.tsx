@@ -36,13 +36,15 @@ export const NewIncomeModal: React.FC<NewIncomeModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (currentAmount <= 0) return;
+    if (!Number.isSafeInteger(currentAmount) || currentAmount <= 0) return;
+    const requestedSavings = Number(savedPortion) || 0;
+    if (saveDirectly && (!Number.isSafeInteger(requestedSavings) || requestedSavings < 0)) return;
 
     let saveToGoal: { goalId: string; amount: number } | undefined = undefined;
-    if (saveDirectly && selectedGoalId && Number(savedPortion) > 0) {
+    if (saveDirectly && selectedGoalId && requestedSavings > 0) {
       saveToGoal = {
         goalId: selectedGoalId,
-        amount: Math.min(currentAmount, Number(savedPortion)),
+        amount: Math.min(currentAmount, requestedSavings),
       };
     }
 
@@ -86,6 +88,8 @@ export const NewIncomeModal: React.FC<NewIncomeModalProps> = ({
             <input
               type="number"
               required
+              min="1"
+              step="1"
               autoFocus
               value={amountStr}
               onChange={(e) => setAmountStr(e.target.value)}
@@ -161,6 +165,8 @@ export const NewIncomeModal: React.FC<NewIncomeModalProps> = ({
                   </select>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={savedPortion}
                     onChange={(e) => setSavedPortion(e.target.value)}
                     placeholder="Montant épargné"
@@ -174,7 +180,8 @@ export const NewIncomeModal: React.FC<NewIncomeModalProps> = ({
           <div className="pt-2">
             <button
               type="submit"
-              disabled={currentAmount <= 0}
+              disabled={!Number.isSafeInteger(currentAmount) || currentAmount <= 0 ||
+                (saveDirectly && (!Number.isSafeInteger(Number(savedPortion) || 0) || Number(savedPortion) < 0))}
               className="w-full py-3.5 bg-[#4A6B3F] disabled:opacity-40 text-[#FAF6EF] rounded-full text-sm font-medium shadow-sm active:scale-[0.98]"
             >
               Enregistrer le revenu

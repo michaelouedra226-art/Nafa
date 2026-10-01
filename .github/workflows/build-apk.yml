@@ -1,4 +1,4 @@
-name: Compilation APK Android (Release & Debug)
+name: Compilation APK Android
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
       build_type:
         description: 'Type de build Android'
         required: true
-        default: 'both'
+        default: 'debug'
         type: choice
         options:
           - 'debug'
@@ -20,42 +20,41 @@ on:
           - 'both'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
+    env:
+      BUILD_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type || (startsWith(github.ref, 'refs/tags/') && 'release' || 'debug') }}
 
     steps:
-      - name: Récupération du code source (Checkout)
-        uses: actions/checkout@v4
+      - name: Récupération du code source
+        uses: actions/checkout@v7
 
       - name: Configuration de Java JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '21'
 
       - name: Configuration du SDK Android
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
-      - name: Installation packages Android SDK & Licences
-        run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platforms;android-36" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-          yes | sdkmanager --licenses || true
+      - name: Installation des composants Android nécessaires
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
 
       - name: Configuration de Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
 
-      - name: Installation des dépendances NPM
-        run: npm ci || npm install
+      - name: Installation reproductible des dépendances
+        run: npm ci
 
-      - name: Compilation de l'application web (Vite production)
+      - name: Compilation de l'application web
         run: npm run build:client
         env:
           NODE_ENV: production
@@ -66,53 +65,51 @@ jobs:
       - name: Rendre gradlew exécutable
         run: chmod +x android/gradlew
 
-      - name: Compilation APKs Android via Gradle
+      - name: Préparer la signature privée pour le build release
+        if: env.BUILD_TYPE == 'release' || env.BUILD_TYPE == 'both'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NAFA_ANDROID_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.NAFA_ANDROID_KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.NAFA_ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.NAFA_ANDROID_KEY_PASSWORD }}
         run: |
-          cd android
-          ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
+          set -euo pipefail
+          if [[ -z "$KEYSTORE_BASE64" || -z "$KEY_ALIAS" || -z "$STORE_PASSWORD" || -z "$KEY_PASSWORD" ]]; then
+            echo "Un build release signé nécessite les secrets NAFA_ANDROID_KEYSTORE_BASE64, NAFA_ANDROID_KEY_ALIAS, NAFA_ANDROID_STORE_PASSWORD et NAFA_ANDROID_KEY_PASSWORD." >&2
+            exit 1
+          fi
+          keystore="$RUNNER_TEMP/nafa-release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          echo "NAFA_RELEASE_STORE_FILE=$keystore" >> "$GITHUB_ENV"
+          echo "NAFA_RELEASE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "NAFA_RELEASE_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "NAFA_RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Compilation APK via Gradle
+        working-directory: android
         env:
           GRADLE_OPTS: -Xmx2g -Dorg.gradle.daemon=false
-
-      - name: Préparation et renommage des fichiers APK
+          BUILD_TYPE: ${{ env.BUILD_TYPE }}
         run: |
-          mkdir -p build-apks
-          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-apks/NAFA-debug.apk
+          set -euo pipefail
+          ./gradlew assembleDebug --no-daemon
+          if [[ "$BUILD_TYPE" == "release" || "$BUILD_TYPE" == "both" ]]; then
+            ./gradlew assembleRelease --no-daemon
           fi
-          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+
+      - name: Préparation des artefacts APK
+        run: |
+          set -euo pipefail
+          mkdir -p build-apks
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-apks/NAFA-debug.apk
+          if [[ "$BUILD_TYPE" == "release" || "$BUILD_TYPE" == "both" ]]; then
             cp android/app/build/outputs/apk/release/app-release.apk build-apks/NAFA-release.apk
           fi
-          ls -la build-apks/
+          ls -lh build-apks/
 
-      - name: Téléversement des artefacts APK sur GitHub Actions
-        uses: actions/upload-artifact@v4
+      - name: Téléversement des artefacts temporaires du workflow
+        uses: actions/upload-artifact@v7
         with:
-          name: nafa-android-apks
+          name: nafa-android-apks-${{ github.run_number }}
           path: build-apks/*.apk
           retention-days: 30
-
-      - name: Publication de la Release GitHub avec Liens de Téléchargement Directs
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0-latest' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('NAFA Version {0}', github.ref_name) || 'NAFA APK (Dernière version disponible)' }}
-          body: |
-            ## NAFA — Application Android
-            
-            Téléchargement direct des fichiers APK prêts à l'installation :
-            
-            - **[Télécharger NAFA-debug.apk (Recommandé - Installation directe)](${{ github.server_url }}/${{ github.repository }}/releases/download/${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0-latest' }}/NAFA-debug.apk)**
-            - **[Télécharger NAFA-release.apk](${{ github.server_url }}/${{ github.repository }}/releases/download/${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0-latest' }}/NAFA-release.apk)**
-            
-            ### Guide d'installation sur votre smartphone Android :
-            1. Cliquez sur le lien direct ci-dessus pour télécharger `NAFA-debug.apk`.
-            2. Ouvrez le fichier `.apk` téléchargé sur votre smartphone.
-            3. Si Android vous demande confirmation, autorisez l'installation d'applications issues de cette source.
-            4. Ouvrez l'application NAFA.
-          files: build-apks/*.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

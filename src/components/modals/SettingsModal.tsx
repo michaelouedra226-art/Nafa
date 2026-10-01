@@ -45,11 +45,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleSaveProfile = () => {
+    const parsedBudget = dailyBudgetTarget.trim() ? Number(dailyBudgetTarget) : undefined;
+    const parsedBalance = pocketBalance.trim() ? Number(pocketBalance) : undefined;
+    if ((parsedBudget !== undefined && (!Number.isSafeInteger(parsedBudget) || parsedBudget <= 0)) ||
+      (parsedBalance !== undefined && (!Number.isSafeInteger(parsedBalance) || parsedBalance < 0))) {
+      alert("Le budget doit être un montant positif en FCFA entiers et le solde un montant entier nul ou positif.");
+      return false;
+    }
     onUpdateProfile({
       name: name.trim() || state.profile.name,
-      dailyBudgetTarget: dailyBudgetTarget ? Number(dailyBudgetTarget) : undefined,
-      pocketBalance: pocketBalance ? Number(pocketBalance) : undefined,
+      dailyBudgetTarget: parsedBudget,
+      pocketBalance: parsedBalance,
     });
+    return true;
   };
 
   const handleDownloadBackup = () => {
@@ -60,12 +68,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     a.href = url;
     a.download = `nafa_sauvegarde_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleRestoreJson = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert("La sauvegarde dépasse la limite de 10 Mo.");
+        e.target.value = "";
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
@@ -74,15 +87,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           onUpdateState(restored);
           alert("Sauvegarde restaurée avec succès !");
         } catch (err) {
-          alert("Fichier JSON invalide.");
+          alert(err instanceof Error ? err.message : "Fichier JSON invalide.");
         }
       };
+      reader.onerror = () => alert("Impossible de lire ce fichier JSON.");
       reader.readAsText(file);
+      e.target.value = "";
     }
   };
 
   const handleAddQuickTile = () => {
-    if (!quickTileLabel.trim() || Number(quickTileAmount) <= 0) return;
+    if (!quickTileLabel.trim() || !Number.isSafeInteger(Number(quickTileAmount)) || Number(quickTileAmount) <= 0) return;
     if (state.quickTiles.length >= 3) {
       alert("Maximum 3 raccourcis rapides pour éviter la surcharge visuelle.");
       return;
@@ -125,8 +140,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => {
-              handleSaveProfile();
-              onClose();
+              if (handleSaveProfile()) onClose();
             }}
             className="p-1 text-[#8A8884] hover:text-[#1F1A15]"
           >
@@ -155,6 +169,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label className="block text-[#8A8884] mb-1">Budget par jour (F)</label>
                 <input
                   type="number"
+                  min="1"
+                  step="1"
                   value={dailyBudgetTarget}
                   onChange={(e) => setDailyBudgetTarget(e.target.value)}
                   placeholder="Calcul automatique"
@@ -165,6 +181,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label className="block text-[#8A8884] mb-1">Solde réel en poche (F)</label>
                 <input
                   type="number"
+                  min="0"
+                  step="1"
                   value={pocketBalance}
                   onChange={(e) => setPocketBalance(e.target.value)}
                   placeholder="Optionnel"
@@ -273,6 +291,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => onUpdateProfile({ privateMode: !state.profile.privateMode })}
+                aria-label="Mode discret"
+                aria-pressed={state.profile.privateMode}
                 className={`p-2 rounded-full ${
                   state.profile.privateMode ? "bg-[#B5541F] text-white" : "bg-[#E8DDC9] text-[#1F1A15]"
                 }`}
@@ -289,6 +309,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => onUpdateProfile({ darkMode: !state.profile.darkMode })}
+                aria-label="Mode sombre"
+                aria-pressed={state.profile.darkMode}
                 className={`p-2 rounded-full ${
                   state.profile.darkMode ? "bg-[#17130F] text-white" : "bg-[#E8DDC9] text-[#1F1A15]"
                 }`}
@@ -297,9 +319,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
-            <div className="p-3 bg-[#E8DDC9]/30 rounded-lg flex items-center gap-2 text-[11px] text-[#4A6B3F]">
+            <div className="p-3 bg-[#E8DDC9]/30 rounded-lg flex items-start gap-2 text-[11px] text-[#4A6B3F]">
               <Shield className="w-4 h-4 shrink-0" />
-              <span>Aucune donnée ne quitte ton téléphone sans ton accord.</span>
+              <span>
+                Tes données budgétaires restent sur cet appareil. Si tu lances « Audio » et que le service en ligne est disponible, le texte prononcé (dont ton prénom et ton budget du jour) est transmis à Gemini de Google; sinon, la voix de ton appareil est utilisée.
+              </span>
             </div>
           </div>
 
@@ -340,6 +364,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
                 <input
                   type="number"
+                  min="1"
+                  step="1"
                   placeholder="Montant F"
                   value={quickTileAmount}
                   onChange={(e) => setQuickTileAmount(e.target.value)}
@@ -453,13 +479,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Pied */}
         <div className="p-3 bg-[#FAF6EF] border-t border-[#E8DDC9] text-center">
-          <button
-            type="button"
-            onClick={() => {
-              handleSaveProfile();
-              onClose();
-            }}
-            className="w-full py-2.5 bg-[#B5541F] text-white rounded-full font-medium"
+            <button
+              type="button"
+              onClick={() => {
+                if (handleSaveProfile()) onClose();
+              }}
+              className="w-full py-2.5 bg-[#B5541F] text-white rounded-full font-medium"
           >
             Enregistrer les modifications
           </button>
