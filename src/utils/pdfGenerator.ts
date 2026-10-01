@@ -31,7 +31,7 @@ export function formatAmountPDF(amount: number): string {
   );
 }
 
-// Charte chromatique officielle NAFA pour le PDF
+// Palette de marque NAFA, utilisée avec des accents sobres pour rester lisible à l’impression.
 const COLOR_TERRE = [181, 84, 31]; // #B5541F
 const COLOR_INDIGO = [30, 42, 68]; // #1E2A44
 const COLOR_OR = [201, 146, 46]; // #C9922E
@@ -41,87 +41,22 @@ const COLOR_MUTED = [138, 136, 132]; // #8A8884
 const COLOR_BG = [250, 246, 239]; // #FAF6EF
 const COLOR_LINE = [232, 221, 201]; // #E8DDC9
 
-/**
- * Dessine un encadrement complet aux motifs géométriques africains raffinés (Mossi & Bogolan)
- */
+/** Cadre léger, pensé pour rester net à l’écran comme à l’impression. */
 function drawAfricanBorder(doc: jsPDF) {
   const left = 8;
-  const right = 202;
   const top = 8;
-  const bottom = 289;
-  const width = right - left; // 194 mm
-  const height = bottom - top; // 281 mm
+  const width = 194;
+  const height = 281;
 
-  // 1. Cadre double extérieur (Terre cuite) / intérieur (Or sahélien)
-  doc.setDrawColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-  doc.setLineWidth(0.65);
+  doc.setDrawColor(COLOR_LINE[0], COLOR_LINE[1], COLOR_LINE[2]);
+  doc.setLineWidth(0.3);
   doc.rect(left, top, width, height, "S");
 
-  doc.setDrawColor(COLOR_OR[0], COLOR_OR[1], COLOR_OR[2]);
-  doc.setLineWidth(0.35);
-  doc.rect(left + 2.2, top + 2.2, width - 4.4, height - 4.4, "S");
-
-  // Helper pour dessiner un losange géométrique
-  const drawDiamond = (cx: number, cy: number, rx: number, ry: number) => {
-    doc.setFillColor(COLOR_OR[0], COLOR_OR[1], COLOR_OR[2]);
-    doc.triangle(cx - rx, cy, cx + rx, cy, cx, cy - ry, "F");
-    doc.triangle(cx - rx, cy, cx + rx, cy, cx, cy + ry, "F");
-  };
-
-  // 2. Frise horizontale haute et basse (motifs alternés losanges et points)
-  const drawHorizontalFrieze = (yCenter: number) => {
-    doc.setFillColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-    doc.rect(left + 5, yCenter - 0.75, width - 10, 1.5, "F");
-
-    for (let x = left + 8; x <= right - 8; x += 5) {
-      const isAlt = Math.floor((x - left) / 5) % 2 === 0;
-      if (isAlt) {
-        drawDiamond(x, yCenter, 1.1, 0.8);
-      } else {
-        doc.setFillColor(255, 255, 255);
-        doc.circle(x, yCenter, 0.4, "F");
-      }
-    }
-  };
-
-  drawHorizontalFrieze(top + 1.1);
-  drawHorizontalFrieze(bottom - 1.1);
-
-  // 3. Frises verticales gauche et droite
-  const drawVerticalFrieze = (xCenter: number) => {
-    doc.setFillColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-    doc.rect(xCenter - 0.75, top + 5, 1.5, height - 10, "F");
-
-    for (let y = top + 8; y <= bottom - 8; y += 5) {
-      const isAlt = Math.floor((y - top) / 5) % 2 === 0;
-      if (isAlt) {
-        drawDiamond(xCenter, y, 0.8, 1.1);
-      } else {
-        doc.setFillColor(255, 255, 255);
-        doc.circle(xCenter, y, 0.4, "F");
-      }
-    }
-  };
-
-  drawVerticalFrieze(left + 1.1);
-  drawVerticalFrieze(right - 1.1);
-
-  // 4. Nœuds raffinés aux quatre coins (Cercle + losange + point)
-  const drawCornerNode = (cx: number, cy: number) => {
-    doc.setFillColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-    doc.circle(cx, cy, 2.5, "F");
-
-    doc.setFillColor(COLOR_OR[0], COLOR_OR[1], COLOR_OR[2]);
-    drawDiamond(cx, cy, 1.6, 1.6);
-
-    doc.setFillColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
-    doc.circle(cx, cy, 0.55, "F");
-  };
-
-  drawCornerNode(left + 1.1, top + 1.1);
-  drawCornerNode(right - 1.1, top + 1.1);
-  drawCornerNode(left + 1.1, bottom - 1.1);
-  drawCornerNode(right - 1.1, bottom - 1.1);
+  // Un accent de marque discret remplace les frises denses sur les quatre côtés.
+  doc.setFillColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
+  doc.roundedRect(left, top, width, 1.2, 0.6, 0.6, "F");
+  doc.setFillColor(COLOR_OR[0], COLOR_OR[1], COLOR_OR[2]);
+  doc.circle(left + 5, top + 5, 0.8, "F");
 }
 
 /**
@@ -144,74 +79,52 @@ function drawTitleSubFrieze(doc: jsPDF, x: number, y: number, w: number) {
   drawMiniDiamond(midX + 5);
 }
 
-/**
- * Dessine le sceau officiel et la zone de signature
- */
+/** Zone de signature personnelle; elle ne constitue pas une certification numérique. */
 function drawSignatureBlock(doc: jsPDF, state: AppState, yPos: number, docRef: string, userName: string) {
-  const sealX = 36;
-  const sealY = yPos + 12;
-
-  // Sceau circulaire NAFA
-  doc.setDrawColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-  doc.setLineWidth(0.7);
-  doc.circle(sealX, sealY, 12, "S");
-
-  doc.setDrawColor(COLOR_OR[0], COLOR_OR[1], COLOR_OR[2]);
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(COLOR_LINE[0], COLOR_LINE[1], COLOR_LINE[2]);
   doc.setLineWidth(0.3);
-  doc.circle(sealX, sealY, 10, "S");
+  doc.roundedRect(14, yPos, 182, 29, 2, 2, "FD");
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.5);
-  doc.setTextColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-  doc.text("CARNET NAFA", sealX, sealY - 4, { align: "center" });
-  doc.text("BURKINA FASO", sealX, sealY, { align: "center" });
-  doc.setFontSize(4.5);
-  doc.setTextColor(COLOR_OR[0], COLOR_OR[1], COLOR_OR[2]);
-  doc.text("★ CERTIFIÉ CONFORME ★", sealX, sealY + 4, { align: "center" });
-
-  // Zone de signature numérique (Droite)
-  const sigX = 120;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
-  doc.text("SIGNATURE & CONTRÔLE NUMÉRIQUE", sigX, yPos + 2);
+  doc.text("DOCUMENT PERSONNEL — SIGNATURE FACULTATIVE", 18, yPos + 6);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.setTextColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
-  doc.text("Signature électronique — Document généré par NAFA", sigX, yPos + 6);
-  doc.text(`Identifiant : ${docRef}`, sigX, yPos + 10);
+  doc.text(
+    doc.splitTextToSize("Synthèse issue des opérations saisies dans NAFA; non auditée ni certifiée par un tiers.", 105),
+    18,
+    yPos + 12,
+  );
+  doc.setFontSize(6);
+  doc.text(`Titulaire : ${userName}  ·  Réf. document : ${docRef}`, 18, yPos + 24);
 
-  // Ligne de signature
-  doc.setDrawColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
-  doc.setLineWidth(0.3);
-  doc.line(sigX, yPos + 19, 194, yPos + 19);
-
-  // Signature manuscrite si présente dans le profil
+  const sigX = 137;
   if (state.profile.signatureBase64) {
     try {
-      doc.addImage(state.profile.signatureBase64, "PNG", sigX + 10, yPos + 7, 42, 11);
+      doc.addImage(state.profile.signatureBase64, "PNG", sigX, yPos + 3, 54, 13);
     } catch {
-      // Ignorer si échec image
+      // La signature reste facultative si son image ne peut pas être intégrée.
     }
-  } else {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-    doc.text(`Signé par : ${userName.toUpperCase()}`, sigX + 2, yPos + 16);
   }
 
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(6.5);
+  doc.setDrawColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
+  doc.setLineWidth(0.25);
+  doc.line(sigX, yPos + 19, 192, yPos + 19);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6);
   doc.setTextColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
-  const dateSigStr = state.profile.signatureDate
-    ? `Signé le ${new Date(state.profile.signatureDate).toLocaleDateString("fr-FR")}`
-    : `Signé le ${new Date().toLocaleDateString("fr-FR")}`;
-  doc.text(dateSigStr, sigX, yPos + 23);
+  doc.text("Signature personnelle", sigX, yPos + 23);
+  if (state.profile.signatureDate) {
+    doc.text(`Date : ${new Date(state.profile.signatureDate).toLocaleDateString("fr-FR")}`, 192, yPos + 27, { align: "right" });
+  }
 }
 
 /**
- * Dessine l'en-tête officiel du document
+ * Dessine l'en-tête de marque NAFA, sans suggérer une émission par une autorité publique.
  */
 function drawPageHeader(
   doc: jsPDF,
@@ -224,7 +137,7 @@ function drawPageHeader(
   const headerY = 13;
 
   if (isFirstPage) {
-    // Logo officiel
+    // Logo NAFA
     try {
       doc.addImage(NAFA_LOGO_BASE64, "PNG", 14, headerY, 15, 15);
     } catch {
@@ -234,29 +147,28 @@ function drawPageHeader(
       doc.circle(21.5, headerY + 7.5, 4.5, "F");
     }
 
-    // Textes officiels
+    // Identité de marque et intitulé neutre
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(10);
     doc.setTextColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-    doc.text("RÉPUBLIQUE DU BURKINA FASO", 32, headerY + 4);
+    doc.text("NAFA", 32, headerY + 5);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
+    doc.setFontSize(7.5);
     doc.setTextColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
-    doc.text("La Patrie ou la mort, nous vaincrons", 32, headerY + 8);
-    doc.text("NAFA — Système Autonome de Rigueur Budgétaire", 32, headerY + 12);
+    doc.text("Carnet budgétaire personnel · Chaque franc compte", 32, headerY + 10);
 
-    // Côté droit
+    // Informations utiles; la référence n'est pas un code de vérification en ligne.
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
-    doc.text(`RÉFÉRENCE : ${docRef}`, 196, headerY + 4, { align: "right" });
+    doc.text(`Réf. document : ${docRef}`, 196, headerY + 4, { align: "right" });
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
-    doc.text(`Émis le ${dateStr} à ${timeStr}`, 196, headerY + 8, { align: "right" });
-    doc.text("Format Standard A4 conforme UEMOA", 196, headerY + 12, { align: "right" });
+    doc.text(`Créé le ${dateStr} à ${timeStr}`, 196, headerY + 8, { align: "right" });
+    doc.text("Format A4 · synthèse déclarative", 196, headerY + 12, { align: "right" });
 
     doc.setDrawColor(COLOR_LINE[0], COLOR_LINE[1], COLOR_LINE[2]);
     doc.setLineWidth(0.4);
@@ -266,7 +178,7 @@ function drawPageHeader(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-    doc.text("NAFA — RELEVÉ CHRONOLOGIQUE DES FLUX", 14, headerY + 2);
+    doc.text("NAFA · RELEVÉ DES OPÉRATIONS", 14, headerY + 2);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
@@ -282,7 +194,13 @@ function drawPageHeader(
 /**
  * Dessine le pied de page normalisé sur chaque page
  */
-function drawPageFooter(doc: jsPDF, pageNo: number, totalPages: number, docRef: string, isTruncated = false) {
+function drawPageFooter(
+  doc: jsPDF,
+  pageNo: number,
+  totalPages: number,
+  docRef: string,
+  truncation?: { shown: number; total: number },
+) {
   const footerY = 281;
 
   doc.setFont("helvetica", "normal");
@@ -291,34 +209,44 @@ function drawPageFooter(doc: jsPDF, pageNo: number, totalPages: number, docRef: 
   doc.text(`Réf : ${docRef}`, 14, footerY);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Généré par NAFA — Chaque franc compte", 105, footerY, { align: "center" });
+  doc.text("NAFA · Synthèse personnelle · Chaque franc compte", 105, footerY, { align: "center" });
 
   doc.setFont("helvetica", "normal");
   doc.text(`Page ${pageNo} / ${totalPages}`, 196, footerY, { align: "right" });
 
-  if (isTruncated && pageNo === totalPages) {
+  if (truncation && pageNo === 1) {
     doc.setFont("helvetica", "italic");
-    doc.setFontSize(6);
+    doc.setFontSize(6.5);
     doc.setTextColor(COLOR_OR[0], COLOR_OR[1], COLOR_OR[2]);
-    doc.text("Historique complet disponible dans l'application NAFA", 105, footerY - 4, { align: "center" });
+    doc.text(
+      `Extrait : ${truncation.shown} opération(s) sur ${truncation.total} · historique complet dans NAFA`,
+      105,
+      footerY - 4,
+      { align: "center" },
+    );
   }
 }
 
 /**
  * Générateur principal de documents PDF A4
  */
-export async function generateNafaPdf(state: AppState, options: PdfGenerationOptions): Promise<PdfExportResult> {
+export async function generateNafaPdf(
+  state: AppState,
+  options: PdfGenerationOptions,
+  delivery: "preview" | "export" = "export",
+): Promise<PdfExportResult> {
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
     format: "a4",
   });
 
-  const userName = (state.profile.name && state.profile.name.trim()) || "Michael";
+  const userName = (state.profile.name && state.profile.name.trim()) || "Titulaire";
   const now = new Date();
   const dateStr = now.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
   const timeStr = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   const monthName = now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const periodLabel = options.period === "this_month" ? monthName : `Historique complet jusqu’au ${dateStr}`;
   const docRef = `NAFA-${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, "0")}-${Math.floor(
     1000 + Math.random() * 9000
   )}`;
@@ -429,12 +357,12 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
   } else if (txCount <= 60) {
     detailPagesCount = 2; // 3 pages total
   } else {
-    // > 60 : Top 40 sur 2 pages supplémentaires + mention tronquée
+    // > 60 : aperçu des 44 mouvements les plus récents + décompte de troncature
     detailPagesCount = 2;
     isTruncated = true;
   }
 
-  const totalPages = 1 + detailPagesCount;
+  const truncation = isTruncated ? { shown: Math.min(44, txCount), total: txCount } : undefined;
 
   // =========================================================================
   // PAGE 1 : SYNTHÈSE & DÉCISION
@@ -459,9 +387,7 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     doc.setFontSize(8);
     doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
     doc.text(
-      `Titulaire du carnet : ${userName.toUpperCase()}  •  Période : ${
-        options.period === "this_month" ? monthName.toUpperCase() : "HISTORIQUE GLOBAL"
-      }`,
+      `Titulaire : ${userName.toUpperCase()}  •  Période des opérations : ${periodLabel.toUpperCase()}`,
       19,
       currentY + 12.5
     );
@@ -476,10 +402,10 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     const spacing = 3.3;
 
     const cards = [
-      { label: "TOTAL REVENUS", val: formatAmountPDF(totalIncome), color: COLOR_VERT },
-      { label: "TOTAL DÉPENSES", val: formatAmountPDF(totalSpent), color: COLOR_TERRE },
-      { label: "ÉPARGNE SÉCURISÉE", val: formatAmountPDF(totalSaved), color: COLOR_OR },
-      { label: "SOLDE DISPONIBLE", val: formatAmountPDF(currentSolde), color: COLOR_INDIGO },
+      { label: "ENTRÉES · PÉRIODE", val: formatAmountPDF(totalIncome), color: COLOR_VERT },
+      { label: "DÉPENSES · PÉRIODE", val: formatAmountPDF(totalSpent), color: COLOR_TERRE },
+      { label: "ÉPARGNE ACTUELLE", val: formatAmountPDF(totalSaved), color: COLOR_OR },
+      { label: "SOLDE ACTUEL", val: formatAmountPDF(currentSolde), color: COLOR_INDIGO },
     ];
 
     cards.forEach((card, i) => {
@@ -501,12 +427,23 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
 
     currentY += boxH + 6;
 
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.setTextColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
+    doc.text(
+      "Entrées et dépenses couvrent la période choisie; épargne et solde reflètent l’état actuel.",
+      14,
+      currentY,
+    );
+    currentY += 5;
+    let sectionNumber = 1;
+
     // Section Objectifs et projets en cours
     if (options.includeGoals && state.goals.length > 0) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9.5);
       doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
-      doc.text("1. ÉTAT DE L'ÉPARGNE & OBJECTIFS (CAURIS D'OR)", 14, currentY);
+      doc.text(`${sectionNumber}. ÉTAT DE L'ÉPARGNE & OBJECTIFS (CAURIS D'OR)`, 14, currentY);
 
       currentY += 3.5;
 
@@ -546,6 +483,7 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
       });
 
       currentY += 2;
+      sectionNumber++;
     }
 
     // Répartition par catégorie (si dépenses existantes)
@@ -553,7 +491,7 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9.5);
       doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
-      doc.text("2. RÉPARTITION DES DÉPENSES PAR CATÉGORIE", 14, currentY);
+      doc.text(`${sectionNumber}. RÉPARTITION DES DÉPENSES PAR CATÉGORIE`, 14, currentY);
 
       currentY += 3.5;
 
@@ -565,15 +503,19 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
           catTotals[catId] = (catTotals[catId] || 0) + t.amount;
         });
 
-      const catList = Object.entries(catTotals)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 4);
+      const sortedCategories = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+      const catList: Array<[string, number]> = sortedCategories.slice(0, 4);
+      const visibleCategoryTotal = catList.reduce((sum, [, amount]) => sum + amount, 0);
+      if (totalSpent > visibleCategoryTotal) {
+        catList.push(["autres", totalSpent - visibleCategoryTotal]);
+      }
 
-      const catColW = 43;
+      const catColW = 35;
+      const catGap = 1.75;
       catList.forEach(([catId, amount], idx) => {
-        const x = 14 + idx * (catColW + spacing);
+        const x = 14 + idx * (catColW + catGap);
         const catObj = state.categories.find((c) => c.id === catId);
-        const catName = catObj ? catObj.name : "Divers";
+        const catName = catId === "autres" ? "Autres" : catObj ? catObj.name : "Divers";
         const catPct = Math.round((amount / totalSpent) * 100);
 
         doc.setFillColor(255, 255, 255);
@@ -592,9 +534,10 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
       });
 
       currentY += 16;
+      sectionNumber++;
     }
 
-    // Gestion de l'historique sur la Page 1 (Si 0 ou petit volume <= 8)
+    // Aperçu d'opérations sur la page de synthèse.
     if (txCount === 0) {
       // État vide élégant selon le cahier des charges
       doc.setFillColor(COLOR_BG[0], COLOR_BG[1], COLOR_BG[2]);
@@ -613,12 +556,18 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
       doc.text("Ce rapport se remplira automatiquement.", 105, currentY + 25, { align: "center" });
 
       currentY += 38;
-    } else if (txCount <= 8) {
-      // Affichage compact sur la page 1
+    } else if (txCount <= 8 || (detailPagesCount > 0 && currentY <= 215)) {
+      const compactTransactions = detailPagesCount > 0 ? sortedTx.slice(0, 5) : sortedTx;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9.5);
       doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
-      doc.text("3. RELEVÉ DES OPÉRATIONS (SYNTHÈSE COMPACTE)", 14, currentY);
+      doc.text(
+        detailPagesCount > 0
+          ? `${sectionNumber}. LES 5 DERNIÈRES OPÉRATIONS`
+          : `${sectionNumber}. RELEVÉ DES OPÉRATIONS (SYNTHÈSE COMPACTE)`,
+        14,
+        currentY,
+      );
 
       currentY += 3.5;
 
@@ -627,7 +576,7 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
       doc.rect(14, currentY, 182, 5.5, "F");
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7);
+      doc.setFontSize(7.4);
       doc.setTextColor(255, 255, 255);
       doc.text("DATE", 17, currentY + 3.8);
       doc.text("TYPE / CATÉGORIE", 46, currentY + 3.8);
@@ -636,18 +585,18 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
 
       currentY += 5.5;
 
-      sortedTx.forEach((tx, idx) => {
+      compactTransactions.forEach((tx, idx) => {
         const isEven = idx % 2 === 0;
         doc.setFillColor(isEven ? 255 : COLOR_BG[0], isEven ? 255 : COLOR_BG[1], isEven ? 255 : COLOR_BG[2]);
-        doc.rect(14, currentY, 182, 5.2, "F");
+        doc.rect(14, currentY, 182, 6.2, "F");
 
         const d = new Date(tx.timestamp);
         const dateFormatted = d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.8);
+        doc.setFontSize(7.4);
         doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
-        doc.text(dateFormatted, 17, currentY + 3.6);
+        doc.text(dateFormatted, 17, currentY + 4.1);
 
         let typeLabel = "Dépense";
         let amountColor = COLOR_TERRE;
@@ -658,34 +607,34 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
           amountColor = COLOR_VERT;
           sign = "+";
         } else if (tx.type === "goal_deposit") {
-          typeLabel = "Versement Projet";
+          typeLabel = "Versement objectif";
           amountColor = COLOR_OR;
-          sign = "→";
+          sign = "-";
         } else if (tx.type === "round_up") {
-          typeLabel = "Arrondi Épargne";
+          typeLabel = "Arrondi d’épargne";
           amountColor = COLOR_OR;
-          sign = "+";
+          sign = "-";
         } else if (tx.type === "balance_adjustment") {
           typeLabel = "Ajustement Solde";
           amountColor = COLOR_INDIGO;
           sign = tx.direction === "in" ? "+" : "-";
         }
 
-        doc.text(typeLabel, 46, currentY + 3.6);
-        doc.text(tx.label || "Opération courante", 95, currentY + 3.6);
+        doc.text(typeLabel, 46, currentY + 4.1);
+        doc.text(tx.label || "Opération courante", 95, currentY + 4.1);
 
         doc.setFont("helvetica", "bold");
         doc.setTextColor(amountColor[0], amountColor[1], amountColor[2]);
-        doc.text(`${sign}${formatAmountPDF(tx.amount)}`, 192, currentY + 3.6, { align: "right" });
+        doc.text(`${sign}${formatAmountPDF(tx.amount)}`, 192, currentY + 4.1, { align: "right" });
 
-        currentY += 5.2;
+        currentY += 6.2;
       });
 
       currentY += 4;
     }
 
     // Si document d'une seule page, le sceau et signature sont en bas de page 1
-    if (totalPages === 1) {
+    if (detailPagesCount === 0) {
       drawSignatureBlock(doc, state, 246, docRef, userName);
     }
   } else if (options.docType === "bourse_parents") {
@@ -700,18 +649,18 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.setTextColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-    doc.text("BILAN DE GESTION DU PÉCULE — PARENTS & BOURSE", 105, currentY + 7, { align: "center" });
+    doc.text("SYNTHÈSE BUDGÉTAIRE À PARTAGER", 105, currentY + 7, { align: "center" });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(COLOR_INDIGO[0], COLOR_INDIGO[1], COLOR_INDIGO[2]);
-    doc.text("JUSTIFICATIF OFFICIEL DE RIGUEUR ET DE GESTION MENSUELLE", 105, currentY + 13, { align: "center" });
+    doc.text("Récapitulatif personnel · données saisies dans NAFA", 105, currentY + 13, { align: "center" });
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
     doc.text(
-      `Titulaire : ${userName.toUpperCase()}   •   Période examinée : ${monthName.toUpperCase()}`,
+      `Titulaire : ${userName.toUpperCase()}   •   Période : ${periodLabel.toUpperCase()}`,
       105,
       currentY + 17.5,
       { align: "center" }
@@ -727,10 +676,10 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     const spacing = 3.3;
 
     const cards = [
-      { label: "RESSOURCES ALLOUÉES", val: formatAmountPDF(totalIncome), color: COLOR_VERT },
-      { label: "DÉPENSES DU MOIS", val: formatAmountPDF(totalSpent), color: COLOR_TERRE },
-      { label: "ÉPARGNE PRÉSERVÉE", val: formatAmountPDF(totalSaved), color: COLOR_OR },
-      { label: "SOLDE EN POCHE ACTUEL", val: formatAmountPDF(currentSolde), color: COLOR_INDIGO },
+      { label: "ENTRÉES · PÉRIODE", val: formatAmountPDF(totalIncome), color: COLOR_VERT },
+      { label: "DÉPENSES · PÉRIODE", val: formatAmountPDF(totalSpent), color: COLOR_TERRE },
+      { label: "ÉPARGNE ACTUELLE", val: formatAmountPDF(totalSaved), color: COLOR_OR },
+      { label: "SOLDE ACTUEL", val: formatAmountPDF(currentSolde), color: COLOR_INDIGO },
     ];
 
     cards.forEach((card, i) => {
@@ -768,8 +717,20 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
         catTotals[catId] = (catTotals[catId] || 0) + t.amount;
       });
 
-    state.categories.slice(0, 5).forEach((cat) => {
-      const spent = catTotals[cat.id] || 0;
+    const topCategories = Object.entries(catTotals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([id, spent]) => ({
+        name: state.categories.find((category) => category.id === id)?.name || "Divers",
+        spent,
+      }));
+    const topCategoriesTotal = topCategories.reduce((sum, category) => sum + category.spent, 0);
+    if (totalSpent > topCategoriesTotal) {
+      topCategories.push({ name: "Autres", spent: totalSpent - topCategoriesTotal });
+    }
+
+    topCategories.forEach((cat) => {
+      const spent = cat.spent;
       const pct = totalSpent > 0 ? Math.round((spent / totalSpent) * 100) : 0;
 
       doc.setFillColor(255, 255, 255);
@@ -806,7 +767,7 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
 
     currentY += 4;
 
-    // Déclaration sur l'honneur signée
+    // Note explicative, sans déclaration imposée au titulaire
     doc.setFillColor(COLOR_BG[0], COLOR_BG[1], COLOR_BG[2]);
     doc.setDrawColor(COLOR_LINE[0], COLOR_LINE[1], COLOR_LINE[2]);
     doc.roundedRect(14, currentY, 182, 22, 2.5, 2.5, "FD");
@@ -814,18 +775,18 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(COLOR_INDIGO[0], COLOR_INDIGO[1], COLOR_INDIGO[2]);
-    doc.text("ENGAGEMENT SUR L'HONNEUR DU BÉNÉFICIAIRE :", 19, currentY + 6);
+    doc.text("À PROPOS DE CETTE SYNTHÈSE", 19, currentY + 6);
 
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7.5);
     doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
-    const honorText = `« Je soussigné(e), ${userName}, certifie sur l'honneur l'exactitude des comptes présentés ci-dessus. Ce récapitulatif démontre la bonne utilisation des fonds mis à disposition pour le mois de ${monthName}, l'absence de gaspillage et la préservation d'une réserve de précaution. »`;
-    doc.text(doc.splitTextToSize(honorText, 172), 19, currentY + 11.5);
+    const summaryNote = `Cette synthèse reprend les opérations enregistrées dans NAFA pour ${periodLabel}. Les montants sont déclaratifs et n’ont pas été vérifiés par un tiers.`;
+    doc.text(doc.splitTextToSize(summaryNote, 172), 19, currentY + 11.5);
 
     drawSignatureBlock(doc, state, 246, docRef, userName);
   } else {
     // =========================================================================
-    // TYPE 2 : ATTESTATION SOLENNELLE D'ÉPARGNE ET DE RIGUEUR
+    // TYPE 2 : RELEVÉ PERSONNEL D'ÉPARGNE
     // =========================================================================
     doc.setFillColor(COLOR_BG[0], COLOR_BG[1], COLOR_BG[2]);
     doc.setDrawColor(COLOR_OR[0], COLOR_OR[1], COLOR_OR[2]);
@@ -835,12 +796,12 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13.5);
     doc.setTextColor(COLOR_INDIGO[0], COLOR_INDIGO[1], COLOR_INDIGO[2]);
-    doc.text("ATTESTATION OFFICIELLE DE RIGUEUR FINANCIÈRE", 105, currentY + 8, { align: "center" });
+    doc.text("RELEVÉ PERSONNEL D’ÉPARGNE", 105, currentY + 8, { align: "center" });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-    doc.text("DOCUMENT DE SOLVABILITÉ ET DE CAPACITÉ D'ÉPARGNE", 105, currentY + 15, { align: "center" });
+    doc.text(`Situation enregistrée au ${dateStr}`, 105, currentY + 15, { align: "center" });
 
     drawTitleSubFrieze(doc, 25, currentY + 18, 160);
 
@@ -852,18 +813,18 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
 
     const introText =
-      `Le carnet numérique NAFA, système autonome de gestion financière au Burkina Faso, certifie par la présente les déclarations et la discipline budgétaire observée par :\n\n` +
-      `Nom et Prénom : ${userName.toUpperCase()}\n` +
-      `Situation déclarée : ${state.profile.situation.toUpperCase()} (Burkina Faso)\n` +
-      `Devise de référence : Franc CFA (XOF)\n\n` +
-      `Il est formellement attesté que le titulaire applique une méthode de plafonnement quotidien strict et d'arrondis systématiques. Les données de clôture au ${dateStr} indiquent :`;
+      `Ce relevé personnel reprend les informations saisies par ${userName.toUpperCase()} dans NAFA. Il ne constitue ni une attestation officielle, ni un audit, ni une évaluation de solvabilité.\n\n` +
+      `Situation déclarée : ${state.profile.situation.toUpperCase()}\n` +
+      `Devise : Franc CFA (XOF)\n` +
+      `Période des opérations : ${periodLabel}\n\n` +
+      `Les soldes et objectifs ci-dessous correspondent aux valeurs enregistrées à la date d’édition.`;
 
     const splitIntro = doc.splitTextToSize(introText, 182);
     doc.text(splitIntro, 14, currentY);
 
     currentY += 35;
 
-    // Tableau de certification
+    // Indicateurs enregistrés
     doc.setFillColor(COLOR_BG[0], COLOR_BG[1], COLOR_BG[2]);
     doc.setDrawColor(COLOR_LINE[0], COLOR_LINE[1], COLOR_LINE[2]);
     doc.roundedRect(14, currentY, 182, 42, 3, 3, "FD");
@@ -871,15 +832,15 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
-    doc.text("INDICATEURS DE DISCIPLINE ET DE SOLVABILITÉ VALIDÉS", 18, currentY + 7);
+    doc.text("SITUATION D’ÉPARGNE ENREGISTRÉE", 18, currentY + 7);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
-    doc.text("• Épargne totale mobilisée et sanctuarisée :", 18, currentY + 15);
-    doc.text("• Cauris d'or (Objectifs majeurs atteints à 100%) :", 18, currentY + 22);
-    doc.text("• Règle de réserve d'urgence appliquée :", 18, currentY + 29);
-    doc.text("• Solde disponible sous contrôle actif :", 18, currentY + 36);
+    doc.text("• Total enregistré dans les objectifs :", 18, currentY + 15);
+    doc.text("• Objectifs terminés :", 18, currentY + 22);
+    doc.text("• Montant du fonds d’urgence :", 18, currentY + 29);
+    doc.text("• Solde en poche enregistré :", 18, currentY + 36);
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(COLOR_VERT[0], COLOR_VERT[1], COLOR_VERT[2]);
@@ -889,7 +850,10 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     doc.text(`${completedGoals.length} PROJET(S) ACCOMPLI(S)`, 188, currentY + 22, { align: "right" });
 
     doc.setTextColor(COLOR_INDIGO[0], COLOR_INDIGO[1], COLOR_INDIGO[2]);
-    doc.text("OUI (CONFORME NAFA)", 188, currentY + 29, { align: "right" });
+    const emergencyBalance = state.goals
+      .filter((goal) => goal.isEmergencyFund)
+      .reduce((sum, goal) => sum + goal.currentAmount, 0);
+    doc.text(formatAmountPDF(emergencyBalance), 188, currentY + 29, { align: "right" });
 
     doc.setTextColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
     doc.text(formatAmountPDF(currentSolde), 188, currentY + 36, { align: "right" });
@@ -901,21 +865,17 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     doc.setFontSize(7.5);
     doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
     const usageNote =
-      "Cette attestation est délivrée à l'intéressé(e) pour servir et valoir ce que de droit auprès de tout bailleur, établissement universitaire, tuteur ou organisme de micro-financement.";
+      "Document informatif généré à partir des opérations enregistrées par son titulaire. Il ne constitue pas un justificatif officiel ni un avis financier.";
     doc.text(doc.splitTextToSize(usageNote, 182), 14, currentY);
 
     drawSignatureBlock(doc, state, 246, docRef, userName);
   }
-
-  // Pied de page Page 1
-  drawPageFooter(doc, 1, totalPages, docRef, isTruncated);
 
   // =========================================================================
   // PAGES SUIVANTES : RELEVÉ CHRONOLOGIQUE GROUPÉ PAR JOUR
   // =========================================================================
   if (detailPagesCount > 0) {
     let currentPageNo = 2;
-    let maxTxPerDetailPage = 22;
     let transactionsToPrint = sortedTx;
 
     if (isTruncated) {
@@ -923,8 +883,6 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
     }
 
     // Regroupement par jour pour l'affichage paginé
-    let renderedTxCount = 0;
-
     doc.addPage();
     drawAfricanBorder(doc);
     drawPageHeader(doc, docRef, dateStr, timeStr, currentPageNo, false);
@@ -938,7 +896,6 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
 
       // Vérifier si assez d'espace pour le titre du jour + au moins 1 ligne
       if (detailY > 250) {
-        drawPageFooter(doc, currentPageNo, totalPages, docRef, isTruncated);
         currentPageNo++;
         doc.addPage();
         drawAfricanBorder(doc);
@@ -958,7 +915,7 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
       if (group.dayTotal > 0) {
         doc.setFont("helvetica", "bold");
         doc.setTextColor(COLOR_TERRE[0], COLOR_TERRE[1], COLOR_TERRE[2]);
-        doc.text(`TOTAL JOUR : ${formatAmountPDF(group.dayTotal)}`, 192, detailY + 3.8, { align: "right" });
+        doc.text(`DÉPENSES DU JOUR : ${formatAmountPDF(group.dayTotal)}`, 192, detailY + 3.8, { align: "right" });
       }
 
       detailY += 5.5;
@@ -966,7 +923,6 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
       // Lignes d'opérations du jour
       groupTxs.forEach((tx, idx) => {
         if (detailY > 260) {
-          drawPageFooter(doc, currentPageNo, totalPages, docRef, isTruncated);
           currentPageNo++;
           doc.addPage();
           drawAfricanBorder(doc);
@@ -976,15 +932,15 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
 
         const isEven = idx % 2 === 0;
         doc.setFillColor(isEven ? 255 : COLOR_BG[0], isEven ? 255 : COLOR_BG[1], isEven ? 255 : COLOR_BG[2]);
-        doc.rect(14, detailY, 182, 5.2, "F");
+        doc.rect(14, detailY, 182, 6.2, "F");
 
         const d = new Date(tx.timestamp);
         const timeFormatted = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.8);
+        doc.setFontSize(7.4);
         doc.setTextColor(COLOR_MUTED[0], COLOR_MUTED[1], COLOR_MUTED[2]);
-        doc.text(timeFormatted, 17, detailY + 3.6);
+        doc.text(timeFormatted, 17, detailY + 4.1);
 
         let typeLabel = "Dépense";
         let amountColor = COLOR_TERRE;
@@ -996,13 +952,13 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
           sign = "+";
         } else if (tx.type === "goal_deposit") {
           const targetGoal = state.goals.find((g) => g.id === tx.goalId);
-          typeLabel = targetGoal ? `Projet : ${targetGoal.name}` : "Versement Projet";
+          typeLabel = targetGoal ? `Projet : ${targetGoal.name}` : "Versement objectif";
           amountColor = COLOR_OR;
-          sign = "→";
+          sign = "-";
         } else if (tx.type === "round_up") {
-          typeLabel = "Arrondi Épargne";
+          typeLabel = "Arrondi d’épargne";
           amountColor = COLOR_OR;
-          sign = "+";
+          sign = "-";
         } else if (tx.type === "balance_adjustment") {
           typeLabel = "Ajustement";
           amountColor = COLOR_INDIGO;
@@ -1011,19 +967,18 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
 
         doc.setFont("helvetica", "bold");
         doc.setTextColor(amountColor[0], amountColor[1], amountColor[2]);
-        doc.text(typeLabel, 34, detailY + 3.6);
+        doc.text(typeLabel, 34, detailY + 4.1);
 
         doc.setFont("helvetica", "normal");
         doc.setTextColor(COLOR_DARK[0], COLOR_DARK[1], COLOR_DARK[2]);
         const cleanLabel = tx.label || "Opération courante";
-        doc.text(cleanLabel.length > 40 ? cleanLabel.slice(0, 38) + "..." : cleanLabel, 86, detailY + 3.6);
+        doc.text(cleanLabel.length > 40 ? cleanLabel.slice(0, 38) + "..." : cleanLabel, 86, detailY + 4.1);
 
         doc.setFont("helvetica", "bold");
         doc.setTextColor(amountColor[0], amountColor[1], amountColor[2]);
-        doc.text(`${sign}${formatAmountPDF(tx.amount)}`, 192, detailY + 3.6, { align: "right" });
+        doc.text(`${sign}${formatAmountPDF(tx.amount)}`, 192, detailY + 4.1, { align: "right" });
 
-        detailY += 5.2;
-        renderedTxCount++;
+        detailY += 6.2;
       });
 
       detailY += 3;
@@ -1034,21 +989,37 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
       drawSignatureBlock(doc, state, 246, docRef, userName);
     }
 
-    drawPageFooter(doc, currentPageNo, totalPages, docRef, isTruncated);
+  }
+
+  const totalPages = doc.getNumberOfPages();
+  for (let pageNo = 1; pageNo <= totalPages; pageNo++) {
+    doc.setPage(pageNo);
+    drawPageFooter(doc, pageNo, totalPages, docRef, truncation);
   }
 
   // Finalisation du fichier
-  const safeName = userName.replace(/[^a-zA-Z0-9]/g, "_");
-  const fileName =
-    options.docType === "rapport"
-      ? `NAFA_Rapport_Financier_${safeName}_${now.getFullYear()}_${now.getMonth() + 1}.pdf`
-      : `NAFA_Attestation_Epargne_${safeName}.pdf`;
+  const safeName = userName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_|_$/g, "") || "Titulaire";
+  const periodToken = options.period === "this_month"
+    ? `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, "0")}`
+    : `historique-jusqua-${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, "0")}`;
+  const fileName = options.docType === "rapport"
+    ? `NAFA_Rapport_Budgetaire_${safeName}_${periodToken}.pdf`
+    : options.docType === "bourse_parents"
+      ? `NAFA_Synthese_Budgetaire_${safeName}_${periodToken}.pdf`
+      : `NAFA_Releve_Personnel_Epargne_${safeName}_${periodToken}.pdf`;
 
   const blob = doc.output("blob");
   const blobUrl = URL.createObjectURL(blob);
   const dataUri = doc.output("datauristring");
 
   const isNative = Capacitor.isNativePlatform();
+  if (delivery === "preview") {
+    return { fileName, blobUrl, dataUri, isNative };
+  }
 
   if (isNative) {
     try {
@@ -1061,8 +1032,12 @@ export async function generateNafaPdf(state: AppState, options: PdfGenerationOpt
       });
 
       await Share.share({
-        title: "Document officiel NAFA",
-        text: `Voici mon document financier officiel généré par le carnet NAFA (${fileName}).`,
+        title: options.docType === "rapport"
+          ? "Rapport budgétaire NAFA"
+          : options.docType === "bourse_parents"
+            ? "Synthèse budgétaire NAFA"
+            : "Relevé personnel d’épargne NAFA",
+        text: `Voici mon document personnel généré à partir des opérations saisies dans NAFA (${fileName}).`,
         url: writeResult.uri,
         dialogTitle: "Partager le document NAFA",
       });
